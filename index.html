@@ -443,7 +443,7 @@ async function aiIdentify(canvas){
         generationConfig:{responseMimeType:"application/json",temperature:0}
       })
     });
-    iif([404,429,500,502,503,504].includes(r.status)){
+    if([404,429,500,502,503,504].includes(r.status)){
   lastErr = new Error(r.status===429 ? "quota atteint (HTTP 429)" : r.status===404 ? "modèle "+m+" introuvable" : "Gemini surchargé (HTTP "+r.status+")");
   await new Promise(ok=>setTimeout(ok,800));
   continue;
