@@ -17,14 +17,14 @@ section{background:var(--card);border:1px solid var(--line);border-radius:var(--
 button,select,input{font:inherit;color:inherit}
 button{border:0;border-radius:var(--r);padding:12px 14px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;width:100%}
 button.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.6}
 button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);margin-bottom:10px}
 label{display:block;font-size:.85rem;color:var(--mute);margin-bottom:3px}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 #cam{display:none;margin-top:12px;position:relative;border-radius:var(--r);overflow:hidden;background:#000}
-#cam video{width:100%;display:block;max-height:300px;object-fit:cover}
+#cam video{width:100%;display:block;max-height:300px;object-fit:cover;cursor:crosshair;touch-action:manipulation}
 #cam::after{content:"";position:absolute;left:8%;right:8%;top:50%;height:2px;background:#ff3b30;box-shadow:0 0 8px #ff3b30;pointer-events:none}
-#cam video{cursor:crosshair;touch-action:manipulation}
 #ring{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;border:2px solid #ffd60a;border-radius:50%;pointer-events:none;opacity:0}
 #ring.on{animation:ring .9s ease-out}
 @keyframes ring{0%{opacity:1;transform:scale(1.6)}40%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1)}}
@@ -47,10 +47,14 @@ summary span{color:var(--mute);font-weight:400}
 .game b{color:var(--price)}
 .game button{width:auto;padding:6px 10px;background:transparent;color:var(--bad);border:1px solid var(--line)}
 .empty{color:var(--mute);margin:0}
-#toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;display:none;font-size:.9rem}
+#toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;display:none;font-size:.9rem;max-width:90vw;text-align:center}
 .thumb{width:44px;height:44px;border-radius:6px;object-fit:cover;background:var(--bg);border:1px solid var(--line);display:block}
 .found{display:flex;gap:12px;align-items:center}
 .found .thumb{width:64px;height:64px}
+.det{padding:8px 0;border-top:1px dashed var(--line)}
+.det:first-child{border-top:0}
+.det .row{margin-top:6px}
+.det input{margin:0}
 </style>
 </head>
 <body>
@@ -70,8 +74,10 @@ summary span{color:var(--mute);font-weight:400}
       <button id="photoBtn" type="button" class="alt">Prendre une photo</button>
       <button id="galBtn" type="button" class="alt">Depuis la galerie</button>
     </div>
+    <button id="lotBtn" type="button" style="margin-top:10px">Jaquette / tranche / lot (IA)</button>
     <input id="photoIn" type="file" accept="image/*" capture="environment" hidden>
     <input id="galIn" type="file" accept="image/*" hidden>
+    <input id="lotIn" type="file" accept="image/*" hidden>
     <div id="result" role="status" aria-live="polite"></div>
   </section>
 
@@ -93,6 +99,13 @@ summary span{color:var(--mute);font-weight:400}
   <section>
     <h2>Catalogue <span id="count" style="color:var(--mute);font-weight:400"></span></h2>
     <div id="list"></div>
+  </section>
+
+  <section>
+    <h2>Reconnaissance IA</h2>
+    <label for="aiKey">Clé API Anthropic (console.anthropic.com)</label>
+    <input id="aiKey" type="password" autocomplete="off" placeholder="sk-ant-...">
+    <button id="aiSave" type="button" class="alt">Enregistrer la clé</button>
   </section>
 
   <section>
@@ -118,14 +131,29 @@ summary span{color:var(--mute);font-weight:400}
 
 <script>
 const KEY = "catalogue_jeux_v1";
-let games = {}; // { code: {name, code, console, price} }
+let games = {}; // { code: {name, code, console, price, cover} }
 
-function load(){ try{ games = JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ games = {}; } }
-function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(games)); }catch(e){ toast("Stockage local indisponible : pensez à exporter."); } }
 const $ = id => document.getElementById(id);
 const eur = n => Number(n).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
 const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-let tt; function toast(m){ const t=$("toast"); t.textContent=m; t.style.display="block"; clearTimeout(tt); tt=setTimeout(()=>t.style.display="none",2600); }
+let tt; function toast(m){ const t=$("toast"); t.textContent=m; t.style.display="block"; clearTimeout(tt); tt=setTimeout(()=>t.style.display="none",2800); }
+
+/* Un code-barres numérique est toujours stocké en EAN-13 (UPC-A 12 chiffres => préfixe 0) */
+function normCode(raw){
+  raw = String(raw||"").trim();
+  if(!/^[\d\s-]+$/.test(raw)) return raw;
+  let c = raw.replace(/\D/g,"");
+  if(c.length===12) c = "0"+c;
+  return c;
+}
+function load(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(KEY)) || {};
+    games = {};
+    Object.values(raw).forEach(g=>{ const c = normCode(g.code) || g.code; games[c] = {...g, code:c}; });
+  }catch(e){ games = {}; }
+}
+function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(games)); }catch(e){ toast("Stockage local indisponible : pensez à exporter."); } }
 
 /* ---------- Scanner ---------- */
 let reader = null, scanning = false, cams = [], noFocusWarned = false;
@@ -158,6 +186,13 @@ async function listCameras(){
   sel.style.display = cams.length > 1 ? "" : "none";
 }
 
+function zxHints(){
+  const h = new Map();
+  h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.UPC_E]);
+  h.set(ZXing.DecodeHintType.TRY_HARDER,true);
+  return h;
+}
+
 async function startScan(deviceId){
   if(!window.ZXing){ toast("Bibliothèque de scan non chargée. Vérifiez la connexion."); return; }
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ toast("Caméra indisponible (page en HTTPS requise)."); return; }
@@ -166,9 +201,7 @@ async function startScan(deviceId){
   $("cam").style.display = "block";
   $("scanBtn").textContent = "Couper la caméra";
   scanning = true;
-  const hints = new Map();
-  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.UPC_E,ZXing.BarcodeFormat.CODE_128]);
-  hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+  const hints = zxHints();
   reader = new ZXing.BrowserMultiFormatReader(hints, 300);
   const id = deviceId || getPref();
   const base = {width:{ideal:1280},height:{ideal:720}};
@@ -182,7 +215,7 @@ async function startScan(deviceId){
     }
     const t = track();
     if(t){ const cur = t.getSettings().deviceId; if(cur) setPref(cur); }
-    await listCameras();          // les noms des caméras n'apparaissent qu'après l'autorisation
+    await listCameras();
     $("camTools").style.display = "grid";
     $("hint").style.display = "block";
   }catch(e){
@@ -231,6 +264,7 @@ $("video").addEventListener("click", async e=>{
 });
 
 function onCode(code){
+  code = normCode(code);
   const box = $("result"), g = games[code];
   box.style.display = "block";
   if(g){ showFound(g); }else{
@@ -243,10 +277,10 @@ function onCode(code){
 }
 
 /* ---------- Catalogue ---------- */
-function fillForm(g){ $("fName").value=g.name; $("fCode").value=g.code; setConsole(g.console); $("fPrice").value=String(g.price).replace(".",","); }
+function fillForm(g){ $("fName").value=g.name; $("fCode").value=g.code.startsWith("n:")?"":g.code; setConsole(g.console); $("fPrice").value=String(g.price).replace(".",","); }
 
 $("saveBtn").addEventListener("click",()=>{
-  const name = $("fName").value.trim(), code = $("fCode").value.trim().replace(/\s+/g,"");
+  const name = $("fName").value.trim(), code = normCode($("fCode").value);
   const price = parseFloat($("fPrice").value.replace(",","."));
   if(!name) return toast("Indiquez le nom du jeu.");
   if(!code) return toast("Indiquez le code-barres.");
@@ -264,14 +298,14 @@ function render(){
   const rank = k=>{ const i=CONSOLES.indexOf(k); return i<0?999:i; };
   const keys = Object.keys(groups).sort((a,b)=>rank(a)-rank(b)||a.localeCompare(b,"fr"));
   $("count").textContent = Object.keys(games).length ? `(${Object.keys(games).length})` : "";
-  if(!keys.length){ list.innerHTML = `<p class="empty">Aucun jeu pour l'instant. Scannez un code-barres ou remplissez le formulaire.</p>`; return; }
+  if(!keys.length){ list.innerHTML = `<p class="empty">Aucun jeu pour l'instant. Scannez un code-barres, photographiez une jaquette ou remplissez le formulaire.</p>`; return; }
   const open = new Set([...list.querySelectorAll("details[open]")].map(d=>d.dataset.k));
   list.innerHTML = keys.map(k=>`
     <details data-k="${esc(k)}" ${open.has(k)?"open":""}>
       <summary>${esc(k)} <span>${groups[k].length}</span></summary>
       ${groups[k].sort((a,b)=>a.name.localeCompare(b.name,"fr")).map(g=>`
         <div class="game">${g.cover?`<img class="thumb" src="${esc(g.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:`<div class="thumb"></div>`}
-          <div data-edit="${esc(g.code)}" style="cursor:pointer">${esc(g.name)}<small>${esc(g.code)}</small></div>
+          <div data-edit="${esc(g.code)}" style="cursor:pointer">${esc(g.name)}<small>${g.code.startsWith("n:")?"":esc(g.code)}</small></div>
           <b>${eur(g.price)}</b>
           <button type="button" data-del="${esc(g.code)}" aria-label="Supprimer ${esc(g.name)}">Suppr.</button>
         </div>`).join("")}
@@ -299,7 +333,7 @@ $("importFile").addEventListener("change",async e=>{
     const data = JSON.parse(await f.text());
     const items = Array.isArray(data) ? data : Object.values(data);
     let n = 0;
-    items.forEach(g=>{ if(g && g.code && g.name && !isNaN(parseFloat(g.price))){ games[String(g.code)] = {name:String(g.name),code:String(g.code),console:g.console||"Autre",price:parseFloat(g.price),cover:g.cover||undefined}; n++; } });
+    items.forEach(g=>{ if(g && g.code && g.name && !isNaN(parseFloat(g.price))){ const c = normCode(g.code); games[c] = {name:String(g.name),code:c,console:g.console||"Autre",price:parseFloat(g.price),cover:g.cover||undefined}; n++; } });
     persist(); render(); toast(`${n} jeu(x) importé(s).`);
   }catch(err){ toast("Fichier de sauvegarde invalide."); }
   e.target.value = "";
@@ -322,7 +356,7 @@ function showFound(g){
 }
 
 /* ---------- Détection par photo et galerie ---------- */
-const FORMATS = ["ean_13","ean_8","upc_a","upc_e","code_128"];
+const FORMATS = ["ean_13","ean_8","upc_a","upc_e"];
 async function toCanvas(file,max){
   let bmp;
   try{ bmp = await createImageBitmap(file,{imageOrientation:"from-image"}); }
@@ -338,10 +372,7 @@ async function decodeCanvas(c){
     try{ const r = await new BarcodeDetector({formats:FORMATS}).detect(c); if(r.length) return r[0].rawValue; }catch(e){}
   }
   if(!window.ZXing) return null;
-  const hints = new Map();
-  hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
-  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.UPC_E,ZXing.BarcodeFormat.CODE_128]);
-  const rd = new ZXing.BrowserMultiFormatReader(hints);
+  const rd = new ZXing.BrowserMultiFormatReader(zxHints());
   try{ return (await rd.decodeFromImageUrl(c.toDataURL("image/jpeg",0.92))).getText(); }
   catch(e){ return null; }
   finally{ try{ rd.reset(); }catch(e){} }
@@ -349,42 +380,120 @@ async function decodeCanvas(c){
 function loadScript(src){ return new Promise((ok,ko)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=ko; document.head.appendChild(s); }); }
 async function ocrText(c){
   if(!window.Tesseract) await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js");
-  const r = await Tesseract.recognize(c,"fra+eng");
-  return r.data.text || "";
+  return (await Tesseract.recognize(c,"fra+eng")).data;
 }
 const norm = t=>t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();
-function handleTitle(text){
-  const lines = text.split("\n").map(l=>l.replace(/[^\wÀ-ÿ'’:&!?. -]/g," ").replace(/\s+/g," ").trim())
-    .filter(l=>l.replace(/[^A-Za-zÀ-ÿ0-9]/g,"").length>=4);
+const tokens = s=>norm(s).split(" ").filter(w=>w && (w.length>2 || /\d/.test(w) || /^[ivx]{2}$/.test(w)));
+const BAD = /pegi|playstation|nintendo|xbox|sony|microsoft|switch|www|http|©|™|®/i;
+const clean = l=>l.replace(/[^\wÀ-ÿ'’:&!?. -]/g," ").replace(/\s+/g," ").trim();
+
+/* Repli sans IA : lecture du texte (OCR) */
+function handleTitle(data){
+  const text = data.text || "";
+  const lines = text.split("\n").map(clean).filter(l=>l.replace(/[^A-Za-zÀ-ÿ0-9]/g,"").length>=4);
   if(!lines.length) return showMsg("Aucun texte lisible. Rapprochez-vous du titre ou du code-barres.",true);
-  const words = new Set(norm(text).split(" ").filter(w=>w.length>2));
-  let best=null, score=0;
-  Object.values(games).forEach(g=>{
-    const t = norm(g.name).split(" ").filter(w=>w.length>2); if(!t.length) return;
-    const sc = t.filter(w=>words.has(w)).length/t.length;
-    if(sc>score){ score=sc; best=g; }
-  });
-  if(best && score>=0.6){ showFound(best); toast("Titre reconnu dans le catalogue."); return; }
-  const guess = lines.sort((a,b)=>b.length-a.length)[0].slice(0,60);
+
+  const words = new Set(norm(text).split(" "));
+  const scored = Object.values(games).map(g=>{
+    const t = tokens(g.name); if(!t.length) return {s:0};
+    const nums = t.filter(w=>/^\d+$/.test(w));
+    if(nums.some(n=>!words.has(n))) return {s:0};
+    const n = t.filter(w=>words.has(w)).length;
+    return {g, s:n/t.length, n};
+  }).filter(x=>x.s>=0.7).sort((a,b)=>b.s-a.s || b.n-a.n);
+
+  if(scored.length){
+    const [a,b] = scored;
+    if(!b || a.s>b.s || a.n>b.n){ showFound(a.g); toast("Titre reconnu dans le catalogue."); return; }
+    showMsg("Plusieurs jeux possibles : "+scored.slice(0,3).map(x=>x.g.name).join(" / ")+". Scannez le code-barres pour être sûr.");
+    return;
+  }
+
+  const cand = (data.lines||[])
+    .map(l=>({t:clean(l.text), h:l.bbox.y1-l.bbox.y0, c:l.confidence}))
+    .filter(l=>l.c>=60 && l.t.replace(/[^A-Za-zÀ-ÿ0-9]/g,"").length>=3 && !BAD.test(l.t))
+    .sort((a,b)=>b.h-a.h);
+  const guess = (cand[0] ? cand[0].t : lines.sort((a,b)=>b.length-a.length)[0]).slice(0,60);
   $("fName").value = guess; $("fCode").value=""; $("fPrice").value="";
   showMsg(`Titre lu : « ${guess} ». Vérifiez le nom, ajoutez le code-barres et le prix.`);
 }
-async function analyzeImage(file){
+
+/* ---------- Reconnaissance IA (jaquette, tranche, lot) ---------- */
+const AK = "anthropic_key", AI_MODEL = "claude-sonnet-5-5"; // "claude-haiku-5-5" = moins cher
+const getAK = ()=>{ try{ return localStorage.getItem(AK)||""; }catch(e){ return ""; } };
+$("aiKey").value = getAK();
+$("aiSave").addEventListener("click",()=>{
+  try{ localStorage.setItem(AK,$("aiKey").value.trim()); toast("Clé enregistrée."); }catch(e){ toast("Stockage local indisponible."); }
+});
+
+async function aiIdentify(canvas){
+  const b64 = canvas.toDataURL("image/jpeg",0.85).split(",")[1];
+  const prompt = `Cette photo montre un ou plusieurs jeux vidéo : jaquette de face, dos, tranche, ou lot en pile ou sur étagère. Identifie chaque exemplaire visible. Réponds UNIQUEMENT par un tableau JSON : [{"name":"titre officiel complet","console":"..."}]. Pour "console", choisis dans : ${CONSOLES.join(", ")}. Sur une tranche, utilise le bandeau ou le logo de la console. N'invente rien : ignore ce qui est illisible.`;
+  const r = await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"content-type":"application/json","x-api-key":getAK(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:AI_MODEL,max_tokens:1500,messages:[{role:"user",content:[
+      {type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
+      {type:"text",text:prompt}]}]})
+  });
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const d = await r.json();
+  const m = d.content.filter(c=>c.type==="text").map(c=>c.text).join("").match(/\[[\s\S]*\]/);
+  return m ? JSON.parse(m[0]) : [];
+}
+
+function findByName(n){ return Object.values(games).find(g=>norm(g.name)===norm(n)); }
+function showDetected(items){
+  const b = $("result"); b.style.display="block"; b.className="";
+  if(!items.length) return showMsg("Aucun jeu reconnu. Essayez une photo plus nette.",true);
+  b._items = items;
+  b.innerHTML = items.map((it,i)=>{
+    const ex = findByName(it.name);
+    return `<div class="det">
+      <div class="name">${esc(it.name)}</div>
+      <div style="color:var(--mute)">${esc(it.console||"Autre")}${ex?" · au catalogue : "+eur(ex.price):""}</div>
+      <div class="row"><input inputmode="decimal" placeholder="Prix €" value="${ex?String(ex.price).replace(".",","):""}"><button type="button" data-add="${i}">Ajouter</button></div></div>`;
+  }).join("");
+}
+$("result").addEventListener("click",e=>{
+  const a = e.target.closest("[data-add]"); if(!a) return;
+  const it = $("result")._items[a.dataset.add];
+  const price = parseFloat(a.closest(".det").querySelector("input").value.replace(",","."));
+  if(isNaN(price) || price < 0) return toast("Indiquez un prix valide.");
+  const ex = findByName(it.name), cons = it.console || "Autre";
+  const code = ex ? ex.code : "n:"+norm(it.name)+"|"+cons;
+  games[code] = {name:it.name, code, console:ex?ex.console:cons, price, cover:ex&&ex.cover};
+  persist(); render(); getCover(code);
+  a.textContent = "✓ Ajouté"; a.disabled = true;
+});
+
+async function analyzeImage(file, lot){
   if(!file) return;
   if(scanning) stopScan();
   showMsg("Analyse de l'image…");
   let canvas;
   try{ canvas = await toCanvas(file,1600); }catch(e){ return showMsg("Image illisible.",true); }
-  let code = await decodeCanvas(canvas);
-  if(!code){ try{ code = await decodeCanvas(await toCanvas(file,900)); }catch(e){} }
-  if(code){ onCode(code); return; }
+  if(!lot){
+    let code = await decodeCanvas(canvas);
+    if(!code){ try{ code = await decodeCanvas(await toCanvas(file,900)); }catch(e){} }
+    if(code){ onCode(code); return; }
+  }
+  if(getAK()){
+    showMsg("Reconnaissance des jeux en cours…");
+    try{ showDetected(await aiIdentify(canvas)); return; }
+    catch(e){ toast("IA indisponible ("+e.message+")."); }
+  }else if(lot){
+    return showMsg("Enregistrez d'abord votre clé Anthropic (section Reconnaissance IA).",true);
+  }
   showMsg("Aucun code-barres lu. Lecture du titre en cours (le premier chargement télécharge environ 10 Mo)…");
   try{ handleTitle(await ocrText(canvas)); }
-  catch(e){ showMsg("Lecture du titre impossible. Essayez une photo plus nette du code-barres.",true); }
+  catch(e){ showMsg("Lecture du titre impossible. Essayez une photo plus nette.",true); }
 }
 $("photoBtn").addEventListener("click",()=>$("photoIn").click());
 $("galBtn").addEventListener("click",()=>$("galIn").click());
+$("lotBtn").addEventListener("click",()=>$("lotIn").click());
 ["photoIn","galIn"].forEach(id=>$(id).addEventListener("change",e=>{ const f=e.target.files[0]; e.target.value=""; analyzeImage(f); }));
+$("lotIn").addEventListener("change",e=>{ const f=e.target.files[0]; e.target.value=""; analyzeImage(f,true); });
 
 /* ---------- Jaquettes (RAWG) ---------- */
 const RK = "rawg_key";
