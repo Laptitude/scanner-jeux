@@ -1,262 +1,215 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scanner de Jeux Ultime</title>
-    <!-- Version stable du scanner de codes-barres multi-formats ZXing -->
-    <script src="https://unpkg.com"></script>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 15px; background: #f4f4f9; color: #333; text-align: center; }
-        .btn { background: #007bff; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; margin: 5px 0; font-weight: bold; }
-        .btn-success { background: #28a745; }
-        .btn-danger { background: #dc3545; }
-        .btn-sec { background: #6c757d; }
-        .zone { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; }
-        /* Paramètres obligatoires pour l'affichage de la caméra sur smartphone */
-        video { width: 100%; max-width: 400px; border-radius: 8px; display: none; background: black; margin-top: 10px; }
-        input, select { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; }
-        .jeu-carte { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #eee; padding: 10px 0; }
-        .prix { font-size: 18px; font-weight: bold; color: #28a745; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prix Jeux – Scanner & catalogue</title>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<style>
+:root{--bg:#eef0f3;--card:#fff;--ink:#16213a;--mute:#5d6678;--line:#d5d9e1;--accent:#2b4acb;--price:#0a8f4a;--bad:#c0392b;--r:10px}
+@media (prefers-color-scheme:dark){:root{--bg:#10141f;--card:#1a2030;--ink:#e8ecf5;--mute:#98a2b8;--line:#2c3550;--accent:#7f98ff;--price:#3ddc84;--bad:#ff7b6b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:max(14px,env(safe-area-inset-top)) 14px max(24px,env(safe-area-inset-bottom))}
+main{max-width:560px;margin:0 auto;display:grid;gap:14px}
+h1{font-size:1.5rem;margin:4px 0 0;letter-spacing:-.02em}
+h2{font-size:1.05rem;margin:0 0 10px}
+section{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+button,select,input{font:inherit;color:inherit}
+button{border:0;border-radius:var(--r);padding:12px 14px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;width:100%}
+button.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);margin-bottom:10px}
+label{display:block;font-size:.85rem;color:var(--mute);margin-bottom:3px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#cam{display:none;margin-top:12px;position:relative;border-radius:var(--r);overflow:hidden;background:#000}
+#cam video{width:100%;display:block;max-height:300px;object-fit:cover}
+#cam::after{content:"";position:absolute;left:8%;right:8%;top:50%;height:2px;background:#ff3b30;box-shadow:0 0 8px #ff3b30}
+#result{margin-top:12px;display:none;padding:12px;border-radius:var(--r);border:1px solid var(--line)}
+#result .name{font-weight:700}
+#result .price{color:var(--price);font-size:1.8rem;font-weight:800}
+#result.unknown{border-color:var(--bad)}
+#result.unknown .name{color:var(--bad)}
+details{border-top:1px solid var(--line)}
+details:first-of-type{border-top:0}
+summary{padding:12px 2px;font-weight:600;cursor:pointer;display:flex;justify-content:space-between}
+summary span{color:var(--mute);font-weight:400}
+.game{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 2px;border-top:1px dashed var(--line)}
+.game small{display:block;color:var(--mute)}
+.game b{color:var(--price)}
+.game button{width:auto;padding:6px 10px;background:transparent;color:var(--bad);border:1px solid var(--line)}
+.empty{color:var(--mute);margin:0}
+#toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;display:none;font-size:.9rem}
+</style>
 </head>
 <body>
+<main>
+  <h1>Prix Jeux</h1>
 
-    <h1>🎮 Mon Scanner de Jeux</h1>
+  <section>
+    <h2>Scanner un code-barres</h2>
+    <button id="scanBtn" type="button">Activer la caméra</button>
+    <div id="cam"><video id="video" playsinline muted autoplay webkit-playsinline></video></div>
+    <div id="result" role="status" aria-live="polite"></div>
+  </section>
 
-    <!-- SECTION 1 : CAMERA & SCANNER CODE-BARRES -->
-    <div class="zone">
-        <h2>🔍 Scanner un Code-Barres</h2>
-        <button class="btn" id="btn-scan" onclick="basculerCamera()">📸 Activer la Caméra</button>
-        <!-- Les attributs autoplay, muted et playsinline sont obligatoires pour forcer l'affichage sur iPhone/Safari -->
-        <video id="video" autoplay muted playsinline></video>
-        <div id="resultat-scan" style="margin-top: 10px; font-weight: bold;"></div>
+  <section>
+    <h2>Ajouter ou modifier un jeu</h2>
+    <label for="fName">Nom du jeu</label>
+    <input id="fName" autocomplete="off" placeholder="Ex. Zelda : Tears of the Kingdom">
+    <label for="fCode">Code-barres</label>
+    <input id="fCode" inputmode="numeric" autocomplete="off" placeholder="Scannez ou collez le code">
+    <div class="row">
+      <div><label for="fConsole">Support</label>
+        <select id="fConsole">
+          <option>PS5</option><option>PS4</option><option>Switch</option><option>Xbox Series</option>
+          <option>Xbox One</option><option>Wii</option><option>PC</option><option>Rétro</option><option>Autre</option>
+        </select></div>
+      <div><label for="fPrice">Prix (€)</label>
+        <input id="fPrice" inputmode="decimal" placeholder="29,90"></div>
     </div>
+    <button id="saveBtn" type="button">Enregistrer le jeu</button>
+  </section>
 
-    <!-- SECTION 2 : CONFIGURATION DU CATALOGUE ADMINISTRATIVE -->
-    <div class="zone">
-        <h2>⚙️ Gérer le Catalogue de Prix</h2>
-        <input type="text" id="nom-jeu" placeholder="Nom du jeu (ex: Mario Kart)">
-        <input type="text" id="cb-jeu" placeholder="Code-barres (Optionnel - rempli par le scan)">
-        <select id="console-jeu">
-            <option value="PS5">PS5</option>
-            <option value="PS4">PS4</option>
-            <option value="Switch">Nintendo Switch</option>
-            <option value="Wii / Wii U">Wii / Wii U</option>
-            <option value="3DS / DS">3DS / DS</option>
-            <option value="Retro">Rétro (PS1, PS2, Xbox...)</option>
-        </select>
-        <input type="number" id="prix-jeu" placeholder="Votre Prix Personnalisé (€)" step="0.5">
-        <button class="btn btn-success" onclick="ajouterJeu()">Enregistrer le Jeu</button>
+  <section>
+    <h2>Catalogue <span id="count" style="color:var(--mute);font-weight:400"></span></h2>
+    <div id="list"></div>
+  </section>
+
+  <section>
+    <h2>Sauvegarde</h2>
+    <div class="row">
+      <button id="exportBtn" type="button" class="alt">Exporter (.json)</button>
+      <button id="importBtn" type="button" class="alt">Importer</button>
     </div>
+    <input id="importFile" type="file" accept=".json,application/json" hidden>
+  </section>
+</main>
+<div id="toast"></div>
 
-    <!-- SECTION 3 : BIBLIOTHÈQUE ET FICHIERS DE SAUVEGARDE -->
-    <div class="zone">
-        <h2>📋 Ma Bibliothèque</h2>
-        <button class="btn btn-sec" onclick="exporterDonnees()">💾 Sauvegarder (Exporter fichier)</button>
-        <input type="file" id="fichier-import" onchange="importerDonnees()" style="display:none;">
-        <button class="btn btn-sec" onclick="document.getElementById('fichier-import').click()">📂 Charger une sauvegarde</button>
-        <div id="liste-jeux" style="text-align: left; margin-top: 15px;"></div>
-    </div>
+<script>
+const KEY = "catalogue_jeux_v1";
+let games = {}; // { code: {name, code, console, price} }
 
-    <script>
-        // Récupération des données locales ou initialisation d'une liste vide
-        let catalogue = JSON.parse(localStorage.getItem('catalogue_jeux')) || [];
-        let codeReader = null;
-        let cameraActive = false;
+function load(){ try{ games = JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){ games = {}; } }
+function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(games)); }catch(e){ toast("Stockage local indisponible : pensez à exporter."); } }
+const $ = id => document.getElementById(id);
+const eur = n => Number(n).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
+const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let tt; function toast(m){ const t=$("toast"); t.textContent=m; t.style.display="block"; clearTimeout(tt); tt=setTimeout(()=>t.style.display="none",2600); }
 
-        // Fonction d'affichage triée par console
-        function afficherCatalogue() {
-            const liste = document.getElementById('liste-jeux');
-            liste.innerHTML = '';
-            
-            if (catalogue.length === 0) {
-                liste.innerHTML = '<p style="color:gray; text-align:center;">Votre bibliothèque est vide.</p>';
-                return;
-            }
+/* ---------- Scanner ---------- */
+let reader = null, scanning = false;
+function stopScan(){
+  if(reader){ try{ reader.reset(); }catch(e){} reader = null; }
+  const v = $("video");
+  if(v.srcObject){ v.srcObject.getTracks().forEach(t=>t.stop()); v.srcObject = null; }
+  $("cam").style.display = "none";
+  $("scanBtn").textContent = "Activer la caméra";
+  scanning = false;
+}
+async function startScan(){
+  if(!window.ZXing){ toast("Bibliothèque de scan non chargée. Vérifiez la connexion."); return; }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ toast("Caméra indisponible (page en HTTPS requise)."); return; }
+  const v = $("video");
+  v.setAttribute("playsinline",""); v.muted = true;
+  $("cam").style.display = "block";
+  $("scanBtn").textContent = "Couper la caméra";
+  scanning = true;
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.UPC_E,ZXing.BarcodeFormat.CODE_128]);
+  hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+  reader = new ZXing.BrowserMultiFormatReader(hints, 300);
+  try{
+    await reader.decodeFromConstraints(
+      {video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}}, v,
+      (res)=>{ if(res && scanning){ const code = res.getText(); stopScan(); onCode(code); } }
+    );
+  }catch(e){
+    stopScan();
+    toast(e && e.name==="NotAllowedError" ? "Accès à la caméra refusé." : "Impossible d'ouvrir la caméra.");
+  }
+}
+$("scanBtn").addEventListener("click",()=>scanning?stopScan():startScan());
 
-            const categories = {};
-            catalogue.forEach(jeu => {
-                if (!categories[jeu.console]) categories[jeu.console] = [];
-                categories[jeu.console].push(jeu);
-            });
+function onCode(code){
+  const box = $("result"), g = games[code];
+  box.style.display = "block";
+  if(g){
+    box.className = "";
+    box.innerHTML = `<div class="name">${esc(g.name)}</div><div style="color:var(--mute)">${esc(g.console)}</div><div class="price">${eur(g.price)}</div>`;
+    fillForm(g);
+  }else{
+    box.className = "unknown";
+    box.innerHTML = `<div class="name">Jeu inconnu</div><div style="color:var(--mute)">Code ${esc(code)} : ajoutez-le avec le formulaire ci-dessous.</div>`;
+    $("fCode").value = code; $("fName").value = ""; $("fPrice").value = "";
+    $("fName").focus();
+  }
+  if(navigator.vibrate) navigator.vibrate(60);
+}
 
-            for (let console in categories) {
-                liste.innerHTML += `<h3>📁 Jeux ${console}</h3>`;
-                categories[console].forEach(jeu => {
-                    liste.innerHTML += `
-                        <div class="jeu-carte">
-                            <div>
-                                <strong>${jeu.nom}</strong><br>
-                                <small style="color:gray;">CB: ${jeu.cb || 'Aucun'}</small>
-                            </div>
-                            <div class="prix">${jeu.prix} €</div>
-                        </div>
-                    `;
-                });
-            }
-        }
+/* ---------- Catalogue ---------- */
+function fillForm(g){ $("fName").value=g.name; $("fCode").value=g.code; $("fConsole").value=g.console; $("fPrice").value=String(g.price).replace(".",","); }
 
-        // Fonction d'ajout ou modification de tarif
-        function ajouterJeu() {
-            const nom = document.getElementById('nom-jeu').value.trim();
-            const cb = document.getElementById('cb-jeu').value.trim();
-            const consoleJeu = document.getElementById('console-jeu').value;
-            const prix = document.getElementById('prix-jeu').value;
+$("saveBtn").addEventListener("click",()=>{
+  const name = $("fName").value.trim(), code = $("fCode").value.trim().replace(/\s+/g,"");
+  const price = parseFloat($("fPrice").value.replace(",","."));
+  if(!name) return toast("Indiquez le nom du jeu.");
+  if(!code) return toast("Indiquez le code-barres.");
+  if(isNaN(price) || price < 0) return toast("Indiquez un prix valide.");
+  games[code] = {name, code, console:$("fConsole").value, price};
+  persist(); render();
+  $("fName").value=$("fCode").value=$("fPrice").value="";
+  toast("Jeu enregistré.");
+});
 
-            if (!nom || !prix) {
-                alert('Veuillez remplir au moins le nom et le prix !');
-                return;
-            }
+function render(){
+  const list = $("list"), groups = {};
+  Object.values(games).forEach(g=>(groups[g.console] ||= []).push(g));
+  const keys = Object.keys(groups).sort((a,b)=>a.localeCompare(b,"fr"));
+  $("count").textContent = Object.keys(games).length ? `(${Object.keys(games).length})` : "";
+  if(!keys.length){ list.innerHTML = `<p class="empty">Aucun jeu pour l'instant. Scannez un code-barres ou remplissez le formulaire.</p>`; return; }
+  const open = new Set([...list.querySelectorAll("details[open]")].map(d=>d.dataset.k));
+  list.innerHTML = keys.map(k=>`
+    <details data-k="${esc(k)}" ${open.has(k)?"open":""}>
+      <summary>${esc(k)} <span>${groups[k].length}</span></summary>
+      ${groups[k].sort((a,b)=>a.name.localeCompare(b.name,"fr")).map(g=>`
+        <div class="game">
+          <div data-edit="${esc(g.code)}" style="cursor:pointer">${esc(g.name)}<small>${esc(g.code)}</small></div>
+          <b>${eur(g.price)}</b>
+          <button type="button" data-del="${esc(g.code)}" aria-label="Supprimer ${esc(g.name)}">Suppr.</button>
+        </div>`).join("")}
+    </details>`).join("");
+}
+$("list").addEventListener("click",e=>{
+  const d = e.target.closest("[data-del]"), ed = e.target.closest("[data-edit]");
+  if(d){ const g = games[d.dataset.del]; if(g && confirm(`Supprimer « ${g.name} » ?`)){ delete games[g.code]; persist(); render(); } }
+  else if(ed){ fillForm(games[ed.dataset.edit]); $("fName").scrollIntoView({behavior:"smooth",block:"center"}); }
+});
 
-            if (cb) { catalogue = catalogue.filter(j => j.cb !== cb); }
-            catalogue = catalogue.filter(j => j.nom.toLowerCase() !== nom.toLowerCase());
+/* ---------- Sauvegarde ---------- */
+$("exportBtn").addEventListener("click",()=>{
+  const blob = new Blob([JSON.stringify(games,null,2)],{type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "sauvegarde_catalogue.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast("Sauvegarde exportée.");
+});
+$("importBtn").addEventListener("click",()=>$("importFile").click());
+$("importFile").addEventListener("change",async e=>{
+  const f = e.target.files[0]; if(!f) return;
+  try{
+    const data = JSON.parse(await f.text());
+    const items = Array.isArray(data) ? data : Object.values(data);
+    let n = 0;
+    items.forEach(g=>{ if(g && g.code && g.name && !isNaN(parseFloat(g.price))){ games[String(g.code)] = {name:String(g.name),code:String(g.code),console:g.console||"Autre",price:parseFloat(g.price)}; n++; } });
+    persist(); render(); toast(`${n} jeu(x) importé(s).`);
+  }catch(err){ toast("Fichier de sauvegarde invalide."); }
+  e.target.value = "";
+});
 
-            catalogue.push({ nom, cb, console: consoleJeu, prix: parseFloat(prix) });
-            localStorage.setItem('catalogue_jeux', JSON.stringify(catalogue));
-            
-            document.getElementById('nom-jeu').value = '';
-            document.getElementById('cb-jeu').value = '';
-            document.getElementById('prix-jeu').value = '';
-            
-            alert('Jeu enregistré !');
-            afficherCatalogue();
-        }
-
-        // Gestionnaire de l'interrupteur ON/OFF du bouton caméra
-        function basculerCamera() {
-            if (!cameraActive) {
-                demarrerScanner();
-            } else {
-                arreterScanner();
-            }
-        }
-
-        // Démarrage de la caméra et requêtes d'autorisations universelles
-        function demarrerScanner() {
-            const video = document.getElementById('video');
-            const btn = document.getElementById('btn-scan');
-            
-            video.style.display = 'block';
-            document.getElementById('resultat-scan').innerText = "Demande d'autorisation de la caméra...";
-
-            // Configuration pour forcer la caméra arrière sur les téléphones
-            const contraintes = {
-                video: { facingMode: { exact: "environment" } },
-                audio: false
-            };
-
-            codeReader = new ZXing.BrowserMultiFormatReader();
-            
-            // Tentative 1 : Cibler précisément le capteur arrière (Mode environnement)
-            navigator.mediaDevices.getUserMedia(contraintes)
-            .then((stream) => {
-                lierFluxVideo(stream, video, btn);
-            })
-            .catch((err) => {
-                console.log("Caméra arrière spécifique introuvable, tentative sur le capteur général...", err);
-                
-                // Tentative 2 : Secours universel (Prend n'importe quelle caméra disponible si la contrainte stricte échoue)
-                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                .then((stream) => {
-                    lierFluxVideo(stream, video, btn);
-                })
-                .catch((erreurGlobale) => {
-                    document.getElementById('resultat-scan').innerHTML = `<span style="color:red;">❌ Erreur : Caméra bloquée. Veuillez autoriser l'accès à l'appareil photo dans les paramètres de votre navigateur internet.</span>`;
-                    video.style.display = 'none';
-                });
-            });
-        }
-
-        // Liaison de la caméra et écoute des codes-barres
-        function lierFluxVideo(stream, video, btn) {
-            video.srcObject = stream;
-            cameraActive = true;
-            btn.innerText = "🛑 Désactiver la Caméra";
-            btn.className = "btn btn-danger";
-            document.getElementById('resultat-scan').innerText = "Recherche d'un code-barres en cours... Centrez la ligne.";
-
-            // Analyse continue du flux vidéo par le décodeur
-            codeReader.decodeFromVideoElement(video, (result, err) => {
-                if (result) {
-                    const codeScanne = result.text;
-                    document.getElementById('resultat-scan').innerHTML = `🔎 Code détecté : <span style="color:blue;">${codeScanne}</span>`;
-                    
-                    // Recherche immédiate du code dans vos prix locaux
-                    const jeuTrouve = catalogue.find(j => j.cb === codeScanne);
-                    if (jeuTrouve) {
-                        document.getElementById('resultat-scan').innerHTML += `<br><span style="color:green; font-size:20px;">✅ ${jeuTrouve.nom} (${jeuTrouve.console}) : ${jeuTrouve.prix} €</span>`;
-                    } else {
-                        document.getElementById('resultat-scan').innerHTML += `<br><span style="color:orange;">⚠️ Code-barres inconnu. Le formulaire a été pré-rempli pour l'ajouter.</span>`;
-                        document.getElementById('cb-jeu').value = codeScanne;
-                    }
-                    arreterScanner(); // Coupe la caméra automatiquement après détection pour économiser la batterie
-                }
-            });
-        }
-
-        // Extinction physique de la caméra
-        function arreterScanner() {
-            const video = document.getElementById('video');
-                    // Extinction physique de la caméra
-        function arreterScanner() {
-            const video = document.getElementById('video');
-            const btn = document.getElementById('btn-scan');
-            
-            if (codeReader) {
-                codeReader.reset(); // Stop les calculs d'analyse
-            }
-            
-            // Ferme l'accès au capteur physique
-            if (video.srcObject) {
-                const stream = video.srcObject;
-                const tracks = stream.getTracks();
-                tracks.forEach(track => track.stop());
-                video.srcObject = null;
-            }
-            
-            video.style.display = 'none';
-            cameraActive = false;
-            btn.innerText = "📸 Activer la Caméra";
-            btn.className = "btn";
-        }
-            video.style.display = 'none';
-            cameraActive = false;
-            btn.innerText = "📸 Activer la Caméra";
-            btn.className = "btn";
-        }
-
-        // Export des données pour sauvegarde externe
-        function exporterDonnees() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(catalogue));
-            const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", "sauvegarde_catalogue.json");
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
-        }
-
-        // Importation d'une sauvegarde existante
-        function importerDonnees() {
-            const file = document.getElementById('fichier-import').files;
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    catalogue = JSON.parse(e.target.result);
-                    localStorage.setItem('catalogue_jeux', JSON.stringify(catalogue));
-                    afficherCatalogue();
-                    alert('Sauvegarde chargée avec succès !');
-                } catch(err) {
-                    alert('Erreur lors de la lecture du fichier de sauvegarde.');
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        // Premier affichage au chargement de la page web
-        afficherCatalogue();
-            </script>
+document.addEventListener("visibilitychange",()=>{ if(document.hidden && scanning) stopScan(); });
+load(); render();
+</script>
 </body>
 </html>
