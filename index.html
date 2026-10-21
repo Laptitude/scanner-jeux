@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner de Jeux Ultime</title>
+    <!-- Chargement des scanners de codes-barres et de l'affichage mobile -->
+    <script src="https://unpkg.com"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 15px; background: #f4f4f9; color: #333; text-align: center; }
+        .btn { background: #007bff; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; margin: 5px 0; }
+        .btn-success { background: #28a745; }
+        .btn-sec { background: #6c757d; }
+        .zone { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        video { width: 100%; max-width: 400px; border-radius: 8px; display: none; background: black; }
+        input, select { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; }
+        .jeu-carte { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #eee; padding: 10px 0; }
+        .prix { font-size: 18px; font-weight: bold; color: #28a745; }
+    </style>
+</head>
+<body>
+
+    <h1>🎮 Mon Scanner de Jeux</h1>
+
+    <!-- SECTION 1 : SCANNER -->
+    <div class="zone">
+        <h2>🔍 Scanner un Code-Barres</h2>
+        <button class="btn" id="btn-scan" onclick="demarrerScanner()">📸 Activer la Caméra</button>
+        <video id="video" autoplay></video>
+        <div id="resultat-scan" style="margin-top: 10px; font-weight: bold;"></div>
+    </div>
+
+    <!-- SECTION 2 : AJOUT MANUEL / MODIFICATION -->
+    <div class="zone">
+        <h2>⚙️ Gérer le Catalogue</h2>
+        <input type="text" id="nom-jeu" placeholder="Nom du jeu (ex: Mario Kart)">
+        <input type="text" id="cb-jeu" placeholder="Code-barres (Optionnel)">
+        <select id="console-jeu">
+            <option value="PS5">PS5</option>
+            <option value="PS4">PS4</option>
+            <option value="Switch">Nintendo Switch</option>
+            <option value="Wii / Wii U">Wii / Wii U</option>
+            <option value="3DS / DS">3DS / DS</option>
+            <option value="Retro">Rétro (PS1, PS2, Xbox...)</option>
+        </select>
+        <input type="number" id="prix-jeu" placeholder="Votre Prix (€)" step="0.5">
+        <button class="btn btn-success" onclick="ajouterJeu()">Enregistrer le Jeu</button>
+    </div>
+
+    <!-- SECTION 3 : BIBLIOTHÈQUE -->
+    <div class="zone">
+        <h2>📋 Ma Bibliothèque</h2>
+        <button class="btn btn-sec" onclick="exporterDonnees()">💾 Sauvegarder (Exporter fichier)</button>
+        <input type="file" id="fichier-import" onchange="importerDonnees()" style="display:none;">
+        <button class="btn btn-sec" onclick="document.getElementById('fichier-import').click()">📂 Charger une sauvegarde</button>
+        <div id="liste-jeux" style="text-align: left; margin-top: 15px;"></div>
+    </div>
+
+    <script>
+        // Chargement initial des données sauvegardées sur le téléphone
+        let catalogue = JSON.parse(localStorage.getItem('catalogue_jeux')) || [];
+        let codeReader = null;
+
+        function afficherCatalogue() {
+            const liste = document.getElementById('liste-jeux');
+            liste.innerHTML = '';
+            
+            if (catalogue.length === 0) {
+                liste.innerHTML = '<p style="color:gray; text-align:center;">Votre catalogue est vide.</p>';
+                return;
+            }
+
+            // Tri des jeux par console
+            const categories = {};
+            catalogue.forEach(jeu => {
+                if (!categories[jeu.console]) categories[jeu.console] = [];
+                categories[jeu.console].push(jeu);
+            });
+
+            for (let console in categories) {
+                liste.innerHTML += `<h3>📁 Jeux ${console}</h3>`;
+                categories[console].forEach(jeu => {
+                    liste.innerHTML += `
+                        <div class="jeu-carte">
+                            <div>
+                                <strong>${jeu.nom}</strong><br>
+                                <small style="color:gray;">CB: ${jeu.cb || 'Aucun'}</small>
+                            </div>
+                            <div class="prix">${jeu.prix} €</div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function ajouterJeu() {
+            const nom = document.getElementById('nom-jeu').value.trim();
+            const cb = document.getElementById('cb-jeu').value.trim();
+            const consoleJeu = document.getElementById('console-jeu').value;
+            const prix = document.getElementById('prix-jeu').value;
+
+            if (!nom || !prix) {
+                alert('Veuillez remplir au moins le nom et le prix !');
+                return;
+            }
+
+            // Éviter les doublons de code-barres
+            if (cb) {
+                catalogue = catalogue.filter(j => j.cb !== cb);
+            }
+            catalogue = catalogue.filter(j => j.nom.toLowerCase() !== nom.toLowerCase());
+
+            catalogue.push({ nom, cb, console: consoleJeu, prix: parseFloat(prix) });
+            localStorage.setItem('catalogue_jeux', JSON.stringify(catalogue));
+            
+            // Réinitialiser les champs
+            document.getElementById('nom-jeu').value = '';
+            document.getElementById('cb-jeu').value = '';
+            document.getElementById('prix-jeu').value = '';
+            
+            alert('Jeu enregistré !');
+            afficherCatalogue();
+        }
+
+        // FONCTION DE SCAN CAMÉRA (SANS SERVEUR)
+        function demarrerScanner() {
+            const video = document.getElementById('video');
+            video.style.display = 'block';
+            document.getElementById('resultat-scan').innerText = "Recherche d'un code-barres...";
+
+            codeReader = new ZXing.BrowserMultiFormatReader();
+            codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+                if (result) {
+                    const codeScanne = result.text;
+                    document.getElementById('resultat-scan').innerHTML = `🔎 Code détecté : <span style="color:blue;">${codeScanne}</span>`;
+                    
+                    // Recherche dans notre catalogue
+                    const jeuTrouve = catalogue.find(j => j.cb === codeScanne);
+                    if (jeuTrouve) {
+                        document.getElementById('resultat-scan').innerHTML += `<br><span style="color:green; font-size:20px;">✅ ${jeuTrouve.nom} (${jeuTrouve.console}) : ${jeuTrouve.prix} €</span>`;
+                    } else {
+                        document.getElementById('resultat-scan').innerHTML += `<br><span style="color:orange;">⚠️ Code inconnu. Remplissez le formulaire pour l'ajouter.</span>`;
+                        document.getElementById('cb-jeu').value = codeScanne;
+                    }
+                    
+                    // Arrêter la caméra après détection
+                    codeReader.reset();
+                    video.style.display = 'none';
+                }
+            });
+        }
+
+        // EXPORT / IMPORT POUR SÉCURISER LES DONNÉES
+        function exporterDonnees() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(catalogue));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "sauvegarde_catalogue.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importerDonnees() {
+            const file = document.getElementById('fichier-import').files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                catalogue = JSON.parse(e.target.result);
+                localStorage.setItem('catalogue_jeux', JSON.stringify(catalogue));
+                afficherCatalogue();
+                alert('Sauvegarde chargée avec succès !');
+            };
+            reader.readAsText(file);
+        }
+
+        // Afficher la liste au démarrage
+        afficherCatalogue();
+    </script>
+</body>
+</html>
