@@ -103,8 +103,8 @@ summary span{color:var(--mute);font-weight:400}
 
   <section>
     <h2>Reconnaissance IA</h2>
-    <label for="aiKey">Clé API Anthropic (console.anthropic.com)</label>
-    <input id="aiKey" type="password" autocomplete="off" placeholder="sk-ant-...">
+    <label for="aiKey">Clé API Google Gemini (aistudio.google.com/apikey)</label>
+    <input id="aiKey" type="password" autocomplete="off" placeholder="AIza...">
     <button id="aiSave" type="button" class="alt">Enregistrer la clé</button>
   </section>
 
@@ -418,10 +418,13 @@ function handleTitle(data){
   showMsg(`Titre lu : « ${guess} ». Vérifiez le nom, ajoutez le code-barres et le prix.`);
 }
 
-/* ---------- Reconnaissance IA (jaquette, tranche, lot) ---------- */
-const AK = "anthropic_key", AI_MODEL = "claude-sonnet-5-5"; // "claude-haiku-5-5" = moins cher
-const getAK = ()=>{ try{ return localStorage.getItem(AK)||""; }catch(e){ return ""; } };
-$("aiKey").value = getAK();
+/* ---------- Reconnaissance IA (Google Gemini : jaquette, tranche, lot) ---------- */
+const AK = "gemini_key";
+const DEFAULT_AK = "COLLE_TA_CLÉ_GEMINI_ICI"; // remplace le texte entre les guillemets par ta clé
+const getAK = ()=>{ try{ return localStorage.getItem(AK)||DEFAULT_AK; }catch(e){ return DEFAULT_AK; } };
+const hasAK = ()=>{ const k = getAK(); return !!k && k.indexOf("COLLE_TA")!==0; };
+const AI_MODELS = ["gemini-3.1-flash-lite","gemini-3.5-flash","gemini-2.5-flash"];
+$("aiKey").value = (()=>{ try{ return localStorage.getItem(AK)||""; }catch(e){ return ""; } })();
 $("aiSave").addEventListener("click",()=>{
   try{ localStorage.setItem(AK,$("aiKey").value.trim()); toast("Clé enregistrée."); }catch(e){ toast("Stockage local indisponible."); }
 });
@@ -429,17 +432,24 @@ $("aiSave").addEventListener("click",()=>{
 async function aiIdentify(canvas){
   const b64 = canvas.toDataURL("image/jpeg",0.85).split(",")[1];
   const prompt = `Cette photo montre un ou plusieurs jeux vidéo : jaquette de face, dos, tranche, ou lot en pile ou sur étagère. Identifie chaque exemplaire visible. Réponds UNIQUEMENT par un tableau JSON : [{"name":"titre officiel complet","console":"..."}]. Pour "console", choisis dans : ${CONSOLES.join(", ")}. Sur une tranche, utilise le bandeau ou le logo de la console. N'invente rien : ignore ce qui est illisible.`;
-  const r = await fetch("https://api.anthropic.com/v1/messages",{
-    method:"POST",
-    headers:{"content-type":"application/json","x-api-key":getAK(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-    body:JSON.stringify({model:AI_MODEL,max_tokens:1500,messages:[{role:"user",content:[
-      {type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
-      {type:"text",text:prompt}]}]})
-  });
-  if(!r.ok) throw new Error("HTTP "+r.status);
-  const d = await r.json();
-  const m = d.content.filter(c=>c.type==="text").map(c=>c.text).join("").match(/\[[\s\S]*\]/);
-  return m ? JSON.parse(m[0]) : [];
+  let lastErr;
+  for(const m of AI_MODELS){
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{
+      method:"POST",
+      headers:{"content-type":"application/json","x-goog-api-key":getAK()},
+      body:JSON.stringify({
+        contents:[{parts:[{inline_data:{mime_type:"image/jpeg",data:b64}},{text:prompt}]}],
+        generationConfig:{responseMimeType:"application/json",temperature:0}
+      })
+    });
+    if(r.status===404 || r.status===429){ lastErr = new Error(r.status===429 ? "quota atteint (HTTP 429)" : "modèle "+m+" introuvable"); continue; }
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const d = await r.json();
+    const parts = (((d.candidates||[])[0]||{}).content||{}).parts;
+    const mm = (parts||[]).map(p=>p.text||"").join("").match(/\[[\s\S]*\]/);
+    return mm ? JSON.parse(mm[0]) : [];
+  }
+  throw lastErr || new Error("aucun modèle disponible");
 }
 
 function findByName(n){ return Object.values(games).find(g=>norm(g.name)===norm(n)); }
@@ -478,12 +488,12 @@ async function analyzeImage(file, lot){
     if(!code){ try{ code = await decodeCanvas(await toCanvas(file,900)); }catch(e){} }
     if(code){ onCode(code); return; }
   }
-  if(getAK()){
+  if(hasAK()){
     showMsg("Reconnaissance des jeux en cours…");
     try{ showDetected(await aiIdentify(canvas)); return; }
     catch(e){ toast("IA indisponible ("+e.message+")."); }
   }else if(lot){
-    return showMsg("Enregistrez d'abord votre clé Anthropic (section Reconnaissance IA).",true);
+    return showMsg("Ajoutez d'abord votre clé Google Gemini (section Reconnaissance IA).",true);
   }
   showMsg("Aucun code-barres lu. Lecture du titre en cours (le premier chargement télécharge environ 10 Mo)…");
   try{ handleTitle(await ocrText(canvas)); }
@@ -497,7 +507,8 @@ $("lotIn").addEventListener("change",e=>{ const f=e.target.files[0]; e.target.va
 
 /* ---------- Jaquettes (RAWG) ---------- */
 const RK = "rawg_key";
-const getKey = ()=>{ try{ return localStorage.getItem(RK)||""; }catch(e){ return ""; } };
+const DEFAULT_RK = "COLLE_TA_CLÉ_RAWG_ICI"; // facultatif : remplace le texte entre les guillemets
+const getKey = ()=>{ let k = ""; try{ k = localStorage.getItem(RK)||""; }catch(e){} if(!k && DEFAULT_RK.indexOf("COLLE_TA")!==0) k = DEFAULT_RK; return k; };
 async function fetchCover(name){
   const r = await fetch(`https://api.rawg.io/api/games?key=${encodeURIComponent(getKey())}&search=${encodeURIComponent(name)}&search_precise=true&page_size=1`);
   if(!r.ok) throw new Error("HTTP "+r.status);
@@ -508,7 +519,7 @@ async function getCover(code){
   const g = games[code]; if(!g || g.cover || !getKey()) return;
   try{ const u = await fetchCover(g.name); if(u && games[code]){ games[code].cover = u; persist(); render(); } }catch(e){}
 }
-$("rawgKey").value = getKey();
+$("rawgKey").value = (()=>{ try{ return localStorage.getItem(RK)||""; }catch(e){ return ""; } })();
 $("rawgSave").addEventListener("click",()=>{
   try{ localStorage.setItem(RK,$("rawgKey").value.trim()); toast("Clé enregistrée."); }catch(e){ toast("Stockage local indisponible."); }
 });
