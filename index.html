@@ -1,547 +1,251 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Prix Jeux – Scanner & catalogue</title>
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scanner Pro - Jeux vidéo</title>
 <style>
-:root{--bg:#eef0f3;--card:#fff;--ink:#16213a;--mute:#5d6678;--line:#d5d9e1;--accent:#2b4acb;--price:#0a8f4a;--bad:#c0392b;--r:10px}
-@media (prefers-color-scheme:dark){:root{--bg:#10141f;--card:#1a2030;--ink:#e8ecf5;--mute:#98a2b8;--line:#2c3550;--accent:#7f98ff;--price:#3ddc84;--bad:#ff7b6b}}
+:root{--bg:#121212;--card:#1e1e1e;--accent:#00adb5;--secondary:#f0a500;--text:#eee;--error:#ff4d4d;--success:#2e7d32}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:max(14px,env(safe-area-inset-top)) 14px max(24px,env(safe-area-inset-bottom))}
-main{max-width:560px;margin:0 auto;display:grid;gap:14px}
-h1{font-size:1.5rem;margin:4px 0 0;letter-spacing:-.02em}
-h2{font-size:1.05rem;margin:0 0 10px}
-section{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
-button,select,input{font:inherit;color:inherit}
-button{border:0;border-radius:var(--r);padding:12px 14px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;width:100%}
-button.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
-button:disabled{opacity:.6}
-button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);margin-bottom:10px}
-label{display:block;font-size:.85rem;color:var(--mute);margin-bottom:3px}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-#cam{display:none;margin-top:12px;position:relative;border-radius:var(--r);overflow:hidden;background:#000}
-#cam video{width:100%;display:block;max-height:300px;object-fit:cover;cursor:crosshair;touch-action:manipulation}
-#cam::after{content:"";position:absolute;left:8%;right:8%;top:50%;height:2px;background:#ff3b30;box-shadow:0 0 8px #ff3b30;pointer-events:none}
-#ring{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;border:2px solid #ffd60a;border-radius:50%;pointer-events:none;opacity:0}
-#ring.on{animation:ring .9s ease-out}
-@keyframes ring{0%{opacity:1;transform:scale(1.6)}40%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1)}}
-@media (prefers-reduced-motion:reduce){#ring.on{animation:none;opacity:1}}
-#camTools{display:none;margin-top:10px;grid-template-columns:1fr auto;gap:10px;align-items:start}
-#camTools select{margin:0}
-#camTools button{width:auto}
-#hint{display:none;margin:8px 0 0;font-size:.85rem;color:var(--mute)}
-#result{margin-top:12px;display:none;padding:12px;border-radius:var(--r);border:1px solid var(--line)}
-#result .name{font-weight:700}
-#result .price{color:var(--price);font-size:1.8rem;font-weight:800}
-#result.unknown{border-color:var(--bad)}
-#result.unknown .name{color:var(--bad)}
-details{border-top:1px solid var(--line)}
-details:first-of-type{border-top:0}
-summary{padding:12px 2px;font-weight:600;cursor:pointer;display:flex;justify-content:space-between}
-summary span{color:var(--mute);font-weight:400}
-.game{display:grid;grid-template-columns:44px 1fr auto auto;gap:10px;align-items:center;padding:8px 2px;border-top:1px dashed var(--line)}
-.game small{display:block;color:var(--mute)}
-.game b{color:var(--price)}
-.game button{width:auto;padding:6px 10px;background:transparent;color:var(--bad);border:1px solid var(--line)}
-.empty{color:var(--mute);margin:0}
-#toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;display:none;font-size:.9rem;max-width:90vw;text-align:center}
-.thumb{width:44px;height:44px;border-radius:6px;object-fit:cover;background:var(--bg);border:1px solid var(--line);display:block}
-.found{display:flex;gap:12px;align-items:center}
-.found .thumb{width:64px;height:64px}
-.det{padding:8px 0;border-top:1px dashed var(--line)}
-.det:first-child{border-top:0}
-.det .row{margin-top:6px}
-.det input{margin:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:15px;display:flex;flex-direction:column;align-items:center}
+.container{width:100%;max-width:500px;background:var(--card);border-radius:12px;padding:20px;box-shadow:0 4px 15px rgba(0,0,0,.5)}
+h1,h2{text-align:center;color:var(--accent);margin-top:0}
+h1{font-size:1.4rem}h2{font-size:1.2rem}
+.section{border-top:2px solid #333;padding-top:15px;margin-top:15px}
+.preview-box{width:100%;height:250px;border:2px dashed #444;border-radius:8px;display:flex;justify-content:center;align-items:center;overflow:hidden;background:#0a0a0a;margin-bottom:15px}
+.preview-box img{max-width:100%;max-height:100%;object-fit:contain;display:none}
+#placeholder-text{color:#666}
+.btn{display:block;width:100%;padding:14px;font-size:1rem;font-weight:bold;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:12px}
+.btn-camera{background:var(--accent)}
+.btn-gallery{background:var(--secondary)}
+.btn-analyze{background:#00b0ff}
+.btn-confirm{background:var(--accent);margin-bottom:0}
+.btn-small{background:#333;padding:10px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+input[type=file]{display:none}
+input[type=password],input[type=text]{width:100%;padding:11px;border-radius:8px;border:1px solid #444;background:#0a0a0a;color:var(--text);margin-bottom:10px;font-size:1rem}
+label{font-size:.85rem;color:#aaa;display:block;margin-bottom:3px}
+.verification-zone{margin-top:20px;padding:15px;background:#252525;border-radius:8px;display:none}
+.verification-zone h3{margin-top:0;color:var(--secondary)}
+.gallery-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:15px;margin:15px 0}
+.gallery-item{position:relative;border:2px solid #444;border-radius:6px;background:#000;cursor:pointer;min-height:170px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px}
+.gallery-item img{max-width:90%;max-height:100px;object-fit:contain}
+.gallery-item .noimg{height:100px;display:flex;align-items:center;color:#666;font-size:.8rem}
+.gallery-item span{font-size:.75rem;text-align:center;margin-top:6px;width:100%}
+.gallery-item small{color:#aaa;font-size:.7rem}
+.gallery-item input{position:absolute;top:5px;left:5px;width:18px;height:18px;accent-color:var(--accent)}
+.gallery-item.selected{border-color:var(--accent);box-shadow:0 0 8px var(--accent)}
+.result-box{margin-top:15px;padding:15px;border-radius:8px;background:var(--success);display:none;font-weight:bold;line-height:1.4}
+.error-box{margin-top:15px;padding:15px;border-radius:8px;background:#2c1a1a;border:1px solid var(--error);color:var(--error);display:none;font-family:monospace;white-space:pre-wrap}
+.loader{display:none;text-align:center;margin:15px 0;font-weight:bold;color:var(--accent)}
+.inventory-list{list-style:none;padding:0;margin:15px 0 0}
+.inventory-item{background:#252525;margin-bottom:10px;padding:10px;border-radius:6px;display:flex;align-items:center;gap:10px}
+.inventory-item img,.inventory-item .ph{width:50px;height:50px;object-fit:contain;background:#000;border-radius:4px;flex:none}
+.inventory-item div{flex:1}
+.inventory-item small{color:#aaa;display:block}
+.inventory-item button{background:none;border:1px solid #555;color:var(--error);border-radius:6px;padding:6px 10px;cursor:pointer}
 </style>
 </head>
 <body>
-<main>
-  <h1>Prix Jeux</h1>
+<div class="container">
+  <h1>Scanner Pro - Jeux vidéo</h1>
 
-  <section>
-    <h2>Scanner un code-barres</h2>
-    <button id="scanBtn" type="button">Activer la caméra</button>
-    <div id="cam"><video id="video" playsinline muted autoplay webkit-playsinline></video><div id="ring"></div></div>
-    <div id="camTools">
-      <select id="camSelect" aria-label="Choisir la caméra"></select>
-      <button id="camSwitch" type="button" class="alt">Changer</button>
+  <div class="section">
+    <h2>Scanner un jeu</h2>
+    <div class="preview-box">
+      <span id="placeholder-text">Aucun scan en cours</span>
+      <img id="image-preview" alt="Aperçu">
     </div>
-    <p id="hint">Touchez l'image pour faire la mise au point.</p>
-    <div class="row" style="margin-top:10px">
-      <button id="photoBtn" type="button" class="alt">Prendre une photo</button>
-      <button id="galBtn" type="button" class="alt">Depuis la galerie</button>
-    </div>
-    <button id="lotBtn" type="button" style="margin-top:10px">Jaquette / tranche / lot (IA)</button>
-    <input id="photoIn" type="file" accept="image/*" capture="environment" hidden>
-    <input id="galIn" type="file" accept="image/*" hidden>
-    <input id="lotIn" type="file" accept="image/*" hidden>
-    <div id="result" role="status" aria-live="polite"></div>
-  </section>
+    <input type="file" id="hidden-input-cam" accept="image/*" capture="environment">
+    <input type="file" id="hidden-input-file" accept="image/*">
+    <button class="btn btn-camera" id="btn-cam">📸 Prendre une photo</button>
+    <button class="btn btn-gallery" id="btn-gal">📁 Choisir depuis la galerie</button>
+    <button class="btn btn-analyze" id="btn-submit" disabled>🔍 Identifier le jeu</button>
+  </div>
 
-  <section>
-    <h2>Ajouter ou modifier un jeu</h2>
-    <label for="fName">Nom du jeu</label>
-    <input id="fName" autocomplete="off" placeholder="Ex. Zelda : Tears of the Kingdom">
-    <label for="fCode">Code-barres</label>
-    <input id="fCode" inputmode="numeric" autocomplete="off" placeholder="Scannez ou collez le code">
-    <div class="row">
-      <div><label for="fConsole">Support</label>
-        <select id="fConsole"></select></div>
-      <div><label for="fPrice">Prix (€)</label>
-        <input id="fPrice" inputmode="decimal" placeholder="29,90"></div>
-    </div>
-    <button id="saveBtn" type="button">Enregistrer le jeu</button>
-  </section>
+  <div class="loader" id="loading-spinner">Analyse IA en cours...</div>
 
-  <section>
-    <h2>Catalogue <span id="count" style="color:var(--mute);font-weight:400"></span></h2>
-    <div id="list"></div>
-  </section>
+  <div class="verification-zone" id="v-zone">
+    <h3>Correspondances trouvées :</h3>
+    <p style="font-size:.9rem;color:#aaa;margin:0">Cochez la bonne proposition :</p>
+    <div class="gallery-grid" id="v-gallery"></div>
+    <button class="btn btn-confirm" id="btn-confirm">✅ Confirmer et ajouter à l'inventaire</button>
+  </div>
 
-  <section>
-    <h2>Reconnaissance IA</h2>
-    <label for="aiKey">Clé API Google Gemini (aistudio.google.com/apikey)</label>
-    <input id="aiKey" type="password" autocomplete="off" placeholder="AIza...">
-    <button id="aiSave" type="button" class="alt">Enregistrer la clé</button>
-  </section>
+  <div class="result-box" id="output-success"></div>
+  <div class="error-box" id="output-error"></div>
 
-  <section>
-    <h2>Jaquettes (facultatif)</h2>
-    <label for="rawgKey">Clé API RAWG (gratuite sur rawg.io/apidocs)</label>
-    <input id="rawgKey" autocomplete="off" placeholder="Collez votre clé">
-    <div class="row">
-      <button id="rawgSave" type="button" class="alt">Enregistrer la clé</button>
-      <button id="coverAll" type="button" class="alt">Chercher les jaquettes</button>
-    </div>
-  </section>
+  <div class="section">
+    <h2>Mon inventaire <span id="count" style="color:#aaa;font-weight:400"></span></h2>
+    <ul class="inventory-list" id="inventory-list"></ul>
+  </div>
 
-  <section>
-    <h2>Sauvegarde</h2>
-    <div class="row">
-      <button id="exportBtn" type="button" class="alt">Exporter (.json)</button>
-      <button id="importBtn" type="button" class="alt">Importer</button>
-    </div>
-    <input id="importFile" type="file" accept=".json,application/json" hidden>
-  </section>
-</main>
-<div id="toast"></div>
+  <div class="section">
+    <h2>Clés API</h2>
+    <label for="geminiKey">Clé Google Gemini (aistudio.google.com/apikey)</label>
+    <input type="password" id="geminiKey" autocomplete="off" placeholder="AIza...">
+    <label for="rawgKey">Clé RAWG, facultative, pour les jaquettes (rawg.io/apidocs)</label>
+    <input type="text" id="rawgKey" autocomplete="off" placeholder="Collez votre clé">
+    <button class="btn btn-small" id="btn-keys">Enregistrer les clés</button>
+  </div>
+</div>
 
 <script>
-const KEY = "catalogue_jeux_v1";
-let games = {}; // { code: {name, code, console, price, cover} }
-
 const $ = id => document.getElementById(id);
-const eur = n => Number(n).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
-const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-let tt; function toast(m){ const t=$("toast"); t.textContent=m; t.style.display="block"; clearTimeout(tt); tt=setTimeout(()=>t.style.display="none",2800); }
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const MODELS = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"];
 
-/* Un code-barres numérique est toujours stocké en EAN-13 (UPC-A 12 chiffres => préfixe 0) */
-function normCode(raw){
-  raw = String(raw||"").trim();
-  if(!/^[\d\s-]+$/.test(raw)) return raw;
-  let c = raw.replace(/\D/g,"");
-  if(c.length===12) c = "0"+c;
-  return c;
-}
-function load(){
-  try{
-    const raw = JSON.parse(localStorage.getItem(KEY)) || {};
-    games = {};
-    Object.values(raw).forEach(g=>{ const c = normCode(g.code) || g.code; games[c] = {...g, code:c}; });
-  }catch(e){ games = {}; }
-}
-function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(games)); }catch(e){ toast("Stockage local indisponible : pensez à exporter."); } }
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
 
-/* ---------- Scanner ---------- */
-let reader = null, scanning = false, cams = [], noFocusWarned = false;
-const PREF = "camera_pref";
-function getPref(){ try{ return localStorage.getItem(PREF); }catch(e){ return null; } }
-function setPref(id){ try{ localStorage.setItem(PREF,id); }catch(e){} }
+let activeBase64 = null, activeMime = "image/jpeg", proposals = [];
+let inventory = [];
+try { inventory = JSON.parse(store("gameInventory")) || []; } catch (e) { inventory = []; }
 
-function stopScan(){
-  if(reader){ try{ reader.reset(); }catch(e){} reader = null; }
-  const v = $("video");
-  if(v.srcObject){ v.srcObject.getTracks().forEach(t=>t.stop()); v.srcObject = null; }
-  $("cam").style.display = "none";
-  $("camTools").style.display = "none";
-  $("hint").style.display = "none";
-  $("scanBtn").textContent = "Activer la caméra";
-  scanning = false;
-}
-
-function track(){ const s = $("video").srcObject; return s && s.getVideoTracks()[0]; }
-
-async function listCameras(){
-  try{
-    const all = await navigator.mediaDevices.enumerateDevices();
-    cams = all.filter(d=>d.kind==="videoinput");
-  }catch(e){ cams = []; }
-  const sel = $("camSelect"), cur = track() && track().getSettings().deviceId;
-  sel.innerHTML = cams.map((c,i)=>`<option value="${esc(c.deviceId)}">${esc(c.label || "Caméra "+(i+1))}</option>`).join("");
-  if(cur) sel.value = cur;
-  $("camSwitch").style.display = cams.length > 1 ? "" : "none";
-  sel.style.display = cams.length > 1 ? "" : "none";
-}
-
-function zxHints(){
-  const h = new Map();
-  h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.UPC_E]);
-  h.set(ZXing.DecodeHintType.TRY_HARDER,true);
-  return h;
-}
-
-async function startScan(deviceId){
-  if(!window.ZXing){ toast("Bibliothèque de scan non chargée. Vérifiez la connexion."); return; }
-  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ toast("Caméra indisponible (page en HTTPS requise)."); return; }
-  const v = $("video");
-  v.setAttribute("playsinline",""); v.muted = true;
-  $("cam").style.display = "block";
-  $("scanBtn").textContent = "Couper la caméra";
-  scanning = true;
-  const hints = zxHints();
-  reader = new ZXing.BrowserMultiFormatReader(hints, 300);
-  const id = deviceId || getPref();
-  const base = {width:{ideal:1280},height:{ideal:720}};
-  const tryStart = async (video)=>reader.decodeFromConstraints({video:{...base,...video}}, v,
-      (res)=>{ if(res && scanning){ const code = res.getText(); stopScan(); onCode(code); } });
-  try{
-    try{ await tryStart(id ? {deviceId:{exact:id}} : {facingMode:{ideal:"environment"}}); }
-    catch(err){
-      if(id && err && (err.name==="OverconstrainedError"||err.name==="NotFoundError")){ reader.reset(); reader = new ZXing.BrowserMultiFormatReader(hints,300); await tryStart({facingMode:{ideal:"environment"}}); }
-      else throw err;
-    }
-    const t = track();
-    if(t){ const cur = t.getSettings().deviceId; if(cur) setPref(cur); }
-    await listCameras();
-    $("camTools").style.display = "grid";
-    $("hint").style.display = "block";
-  }catch(e){
-    stopScan();
-    toast(e && e.name==="NotAllowedError" ? "Accès à la caméra refusé." : "Impossible d'ouvrir la caméra.");
-  }
-}
-
-function switchTo(id){ stopScan(); startScan(id); }
-$("scanBtn").addEventListener("click",()=>scanning?stopScan():startScan());
-$("camSelect").addEventListener("change",e=>switchTo(e.target.value));
-$("camSwitch").addEventListener("click",()=>{
-  if(cams.length < 2) return;
-  const cur = $("camSelect").value, i = cams.findIndex(c=>c.deviceId===cur);
-  switchTo(cams[(i+1)%cams.length].deviceId);
+$("geminiKey").value = store("gemini_key") || "";
+$("rawgKey").value = store("rawg_key") || "";
+$("btn-keys").addEventListener("click", () => {
+  store("gemini_key", $("geminiKey").value.trim());
+  store("rawg_key", $("rawgKey").value.trim());
+  alert("Clés enregistrées sur cet appareil.");
 });
 
-/* Mise au point au toucher */
-$("video").addEventListener("click", async e=>{
-  const v = $("video"), r = v.getBoundingClientRect(), t = track();
-  if(!t || !v.videoWidth) return;
-  const ring = $("ring"), cr = $("cam").getBoundingClientRect();
-  ring.style.left = (e.clientX-cr.left)+"px"; ring.style.top = (e.clientY-cr.top)+"px";
-  ring.classList.remove("on"); void ring.offsetWidth; ring.classList.add("on");
+function showError(msg) { const b = $("output-error"); b.textContent = "❌ " + msg; b.style.display = "block"; }
+function resetBoxes() { $("v-zone").style.display = "none"; $("output-success").style.display = "none"; $("output-error").style.display = "none"; }
 
-  const sc = Math.max(r.width/v.videoWidth, r.height/v.videoHeight);
-  const offX = (v.videoWidth*sc - r.width)/2, offY = (v.videoHeight*sc - r.height)/2;
-  const x = Math.min(1,Math.max(0,(e.clientX-r.left+offX)/(v.videoWidth*sc)));
-  const y = Math.min(1,Math.max(0,(e.clientY-r.top+offY)/(v.videoHeight*sc)));
-
-  const caps = (t.getCapabilities && t.getCapabilities()) || {};
-  const modes = caps.focusMode || [];
-  if(!modes.length){
-    if(!noFocusWarned){ noFocusWarned = true; toast("Cet appareil gère la mise au point automatiquement."); }
-    return;
-  }
-  const mode = modes.includes("single-shot") ? "single-shot" : (modes.includes("continuous") ? "continuous" : modes[0]);
-  try{
-    await t.applyConstraints({advanced:[{focusMode:mode, pointsOfInterest:[{x,y}]}]});
-  }catch(err){
-    try{ await t.applyConstraints({advanced:[{focusMode:mode}]}); }catch(e2){}
-  }
-  if(mode==="single-shot" && modes.includes("continuous")){
-    setTimeout(()=>{ if(track()===t){ t.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{}); } }, 3000);
+function renderInventory() {
+  const ul = $("inventory-list");
+  ul.innerHTML = inventory.map((g, i) => `
+    <li class="inventory-item">
+      ${g.image_url ? `<img src="${esc(g.image_url)}" alt="jaquette" referrerpolicy="no-referrer">` : `<div class="ph"></div>`}
+      <div><strong>${esc(g.titre)}</strong><small>${esc(g.console || "")}</small></div>
+      <button data-del="${i}" aria-label="Supprimer">Suppr.</button>
+    </li>`).join("");
+  $("count").textContent = inventory.length ? "(" + inventory.length + ")" : "";
+}
+$("inventory-list").addEventListener("click", e => {
+  const b = e.target.closest("[data-del]"); if (!b) return;
+  const g = inventory[b.dataset.del];
+  if (g && confirm("Supprimer « " + g.titre + " » ?")) {
+    inventory.splice(b.dataset.del, 1);
+    store("gameInventory", JSON.stringify(inventory));
+    renderInventory();
   }
 });
 
-function onCode(code){
-  code = normCode(code);
-  const box = $("result"), g = games[code];
-  box.style.display = "block";
-  if(g){ showFound(g); }else{
-    box.className = "unknown";
-    box.innerHTML = `<div class="name">Jeu inconnu</div><div style="color:var(--mute)">Code ${esc(code)} : ajoutez-le avec le formulaire ci-dessous.</div>`;
-    $("fCode").value = code; $("fName").value = ""; $("fPrice").value = "";
-    $("fName").focus();
-  }
-  if(navigator.vibrate) navigator.vibrate(60);
+/* Photo : redimensionnée pour limiter le poids envoyé à l'API */
+function processFile(files) {
+  const file = files && files[0]; if (!file) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    const data = c.toDataURL("image/jpeg", 0.85);
+    activeMime = "image/jpeg";
+    activeBase64 = data.split(",")[1];
+    $("image-preview").src = data;
+    $("image-preview").style.display = "block";
+    $("placeholder-text").style.display = "none";
+    $("btn-submit").disabled = false;
+    resetBoxes();
+    URL.revokeObjectURL(url);
+  };
+  img.onerror = () => showError("Image illisible.");
+  img.src = url;
 }
+$("btn-cam").addEventListener("click", () => $("hidden-input-cam").click());
+$("btn-gal").addEventListener("click", () => $("hidden-input-file").click());
+["hidden-input-cam", "hidden-input-file"].forEach(id => $(id).addEventListener("change", e => { processFile(e.target.files); e.target.value = ""; }));
 
-/* ---------- Catalogue ---------- */
-function fillForm(g){ $("fName").value=g.name; $("fCode").value=g.code.startsWith("n:")?"":g.code; setConsole(g.console); $("fPrice").value=String(g.price).replace(".",","); }
-
-$("saveBtn").addEventListener("click",()=>{
-  const name = $("fName").value.trim(), code = normCode($("fCode").value);
-  const price = parseFloat($("fPrice").value.replace(",","."));
-  if(!name) return toast("Indiquez le nom du jeu.");
-  if(!code) return toast("Indiquez le code-barres.");
-  if(isNaN(price) || price < 0) return toast("Indiquez un prix valide.");
-  const old = games[code];
-  games[code] = {name, code, console:$("fConsole").value, price, cover:(old && old.name===name) ? old.cover : undefined};
-  persist(); render(); getCover(code);
-  $("fName").value=$("fCode").value=$("fPrice").value="";
-  toast("Jeu enregistré.");
-});
-
-function render(){
-  const list = $("list"), groups = {};
-  Object.values(games).forEach(g=>(groups[g.console] ||= []).push(g));
-  const rank = k=>{ const i=CONSOLES.indexOf(k); return i<0?999:i; };
-  const keys = Object.keys(groups).sort((a,b)=>rank(a)-rank(b)||a.localeCompare(b,"fr"));
-  $("count").textContent = Object.keys(games).length ? `(${Object.keys(games).length})` : "";
-  if(!keys.length){ list.innerHTML = `<p class="empty">Aucun jeu pour l'instant. Scannez un code-barres, photographiez une jaquette ou remplissez le formulaire.</p>`; return; }
-  const open = new Set([...list.querySelectorAll("details[open]")].map(d=>d.dataset.k));
-  list.innerHTML = keys.map(k=>`
-    <details data-k="${esc(k)}" ${open.has(k)?"open":""}>
-      <summary>${esc(k)} <span>${groups[k].length}</span></summary>
-      ${groups[k].sort((a,b)=>a.name.localeCompare(b.name,"fr")).map(g=>`
-        <div class="game">${g.cover?`<img class="thumb" src="${esc(g.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:`<div class="thumb"></div>`}
-          <div data-edit="${esc(g.code)}" style="cursor:pointer">${esc(g.name)}<small>${g.code.startsWith("n:")?"":esc(g.code)}</small></div>
-          <b>${eur(g.price)}</b>
-          <button type="button" data-del="${esc(g.code)}" aria-label="Supprimer ${esc(g.name)}">Suppr.</button>
-        </div>`).join("")}
-    </details>`).join("");
-}
-$("list").addEventListener("click",e=>{
-  const d = e.target.closest("[data-del]"), ed = e.target.closest("[data-edit]");
-  if(d){ const g = games[d.dataset.del]; if(g && confirm(`Supprimer « ${g.name} » ?`)){ delete games[g.code]; persist(); render(); } }
-  else if(ed){ fillForm(games[ed.dataset.edit]); $("fName").scrollIntoView({behavior:"smooth",block:"center"}); }
-});
-
-/* ---------- Sauvegarde ---------- */
-$("exportBtn").addEventListener("click",()=>{
-  const blob = new Blob([JSON.stringify(games,null,2)],{type:"application/json"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = "sauvegarde_catalogue.json";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-  toast("Sauvegarde exportée.");
-});
-$("importBtn").addEventListener("click",()=>$("importFile").click());
-$("importFile").addEventListener("change",async e=>{
-  const f = e.target.files[0]; if(!f) return;
-  try{
-    const data = JSON.parse(await f.text());
-    const items = Array.isArray(data) ? data : Object.values(data);
-    let n = 0;
-    items.forEach(g=>{ if(g && g.code && g.name && !isNaN(parseFloat(g.price))){ const c = normCode(g.code); games[c] = {name:String(g.name),code:c,console:g.console||"Autre",price:parseFloat(g.price),cover:g.cover||undefined}; n++; } });
-    persist(); render(); toast(`${n} jeu(x) importé(s).`);
-  }catch(err){ toast("Fichier de sauvegarde invalide."); }
-  e.target.value = "";
-});
-
-/* ---------- Consoles ---------- */
-const CONSOLES = ["PS5","PS4","PS3","PS2","PS1","PSP","PS Vita","Switch","Wii U","Wii","GameCube","Nintendo 64","SNES","NES","3DS","DS","Game Boy / GBA","Xbox Series","Xbox One","Xbox 360","Xbox","Dreamcast","Saturn","Mega Drive","PC","Rétro","Autre"];
-$("fConsole").innerHTML = CONSOLES.map(c=>`<option>${esc(c)}</option>`).join("");
-function setConsole(c){
-  const sel = $("fConsole");
-  if(![...sel.options].some(o=>o.value===c)){ const o=document.createElement("option"); o.textContent=c; sel.appendChild(o); }
-  sel.value = c;
-}
-
-function showMsg(t,bad){ const b=$("result"); b.style.display="block"; b.className = bad?"unknown":""; b.innerHTML=`<div style="color:var(--mute)">${esc(t)}</div>`; }
-function showFound(g){
-  const b = $("result"); b.style.display="block"; b.className="";
-  b.innerHTML = `<div class="found">${g.cover?`<img class="thumb" src="${esc(g.cover)}" alt="" referrerpolicy="no-referrer">`:""}<div><div class="name">${esc(g.name)}</div><div style="color:var(--mute)">${esc(g.console)}</div><div class="price">${eur(g.price)}</div></div></div>`;
-  fillForm(g);
-}
-
-/* ---------- Détection par photo et galerie ---------- */
-const FORMATS = ["ean_13","ean_8","upc_a","upc_e"];
-async function toCanvas(file,max){
-  let bmp;
-  try{ bmp = await createImageBitmap(file,{imageOrientation:"from-image"}); }
-  catch(e){ bmp = await new Promise((ok,ko)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=ko; i.src=URL.createObjectURL(file); }); }
-  const k = Math.min(1, max/Math.max(bmp.width,bmp.height));
-  const c = document.createElement("canvas");
-  c.width = Math.round(bmp.width*k); c.height = Math.round(bmp.height*k);
-  c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
-  return c;
-}
-async function decodeCanvas(c){
-  if("BarcodeDetector" in window){
-    try{ const r = await new BarcodeDetector({formats:FORMATS}).detect(c); if(r.length) return r[0].rawValue; }catch(e){}
-  }
-  if(!window.ZXing) return null;
-  const rd = new ZXing.BrowserMultiFormatReader(zxHints());
-  try{ return (await rd.decodeFromImageUrl(c.toDataURL("image/jpeg",0.92))).getText(); }
-  catch(e){ return null; }
-  finally{ try{ rd.reset(); }catch(e){} }
-}
-function loadScript(src){ return new Promise((ok,ko)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=ko; document.head.appendChild(s); }); }
-async function ocrText(c){
-  if(!window.Tesseract) await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js");
-  return (await Tesseract.recognize(c,"fra+eng")).data;
-}
-const norm = t=>t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();
-const tokens = s=>norm(s).split(" ").filter(w=>w && (w.length>2 || /\d/.test(w) || /^[ivx]{2}$/.test(w)));
-const BAD = /pegi|playstation|nintendo|xbox|sony|microsoft|switch|www|http|©|™|®/i;
-const clean = l=>l.replace(/[^\wÀ-ÿ'’:&!?. -]/g," ").replace(/\s+/g," ").trim();
-
-/* Repli sans IA : lecture du texte (OCR) */
-function handleTitle(data){
-  const text = data.text || "";
-  const lines = text.split("\n").map(clean).filter(l=>l.replace(/[^A-Za-zÀ-ÿ0-9]/g,"").length>=4);
-  if(!lines.length) return showMsg("Aucun texte lisible. Rapprochez-vous du titre ou du code-barres.",true);
-
-  const words = new Set(norm(text).split(" "));
-  const scored = Object.values(games).map(g=>{
-    const t = tokens(g.name); if(!t.length) return {s:0};
-    const nums = t.filter(w=>/^\d+$/.test(w));
-    if(nums.some(n=>!words.has(n))) return {s:0};
-    const n = t.filter(w=>words.has(w)).length;
-    return {g, s:n/t.length, n};
-  }).filter(x=>x.s>=0.7).sort((a,b)=>b.s-a.s || b.n-a.n);
-
-  if(scored.length){
-    const [a,b] = scored;
-    if(!b || a.s>b.s || a.n>b.n){ showFound(a.g); toast("Titre reconnu dans le catalogue."); return; }
-    showMsg("Plusieurs jeux possibles : "+scored.slice(0,3).map(x=>x.g.name).join(" / ")+". Scannez le code-barres pour être sûr.");
-    return;
-  }
-
-  const big = (data.lines||[])
-  .map(l=>({t:clean(l.text), h:l.bbox.y1-l.bbox.y0, y:l.bbox.y0, c:l.confidence}))
-  .filter(l=>l.c>=60 && l.t.replace(/[^A-Za-zÀ-ÿ0-9]/g,"").length>=3 && !BAD.test(l.t));
-const maxH = Math.max(0, ...big.map(l=>l.h));
-const guess = (big.length
-  ? big.filter(l=>l.h>=maxH*0.5).sort((a,b)=>a.y-b.y).map(l=>l.t).join(" ")
-  : lines.sort((a,b)=>b.length-a.length)[0]).slice(0,60);
-  $("fName").value = guess; $("fCode").value=""; $("fPrice").value="";
-  showMsg(`Titre lu : « ${guess} ». Vérifiez le nom, ajoutez le code-barres et le prix.`);
-}
-
-/* ---------- Reconnaissance IA (Google Gemini : jaquette, tranche, lot) ---------- */
-const AK = "cleapi"; // remplace le texte entre les guillemets par ta clé
-const getAK = ()=>{ try{ return localStorage.getItem(AK)||DEFAULT_AK; }catch(e){ return DEFAULT_AK; } };
-const hasAK = ()=>{ const k = getAK(); return !!k && k.indexOf("COLLE_TA")!==0; };
-const AI_MODELS = ["gemini-3.1-flash-lite","gemini-3.5-flash","gemini-2.5-flash"];
-$("aiKey").value = (()=>{ try{ return localStorage.getItem(AK)||""; }catch(e){ return ""; } })();
-$("aiSave").addEventListener("click",()=>{
-  try{ localStorage.setItem(AK,$("aiKey").value.trim()); toast("Clé enregistrée."); }catch(e){ toast("Stockage local indisponible."); }
-});
-
-async function aiIdentify(canvas){
-  const b64 = canvas.toDataURL("image/jpeg",0.85).split(",")[1];
-  const prompt = `Cette photo montre un ou plusieurs jeux vidéo : jaquette de face, dos, tranche, ou lot en pile ou sur étagère. Identifie chaque exemplaire visible. Réponds UNIQUEMENT par un tableau JSON : [{"name":"titre officiel complet","console":"..."}]. Pour "console", choisis dans : ${CONSOLES.join(", ")}. Sur une tranche, utilise le bandeau ou le logo de la console. N'invente rien : ignore ce qui est illisible.`;
+async function askGemini() {
+  const key = (store("gemini_key") || "").trim();
+  if (!key) throw new Error("Ajoutez d'abord votre clé Gemini (section Clés API).");
+  const prompt = 'Cette photo montre un jeu vidéo (jaquette, tranche ou dos). Identifie-le. Réponds UNIQUEMENT en JSON strict : {"propositions":[{"titre":"titre officiel complet","console":"support (PS5, PS4, Switch, Xbox...)"}]}. Donne 1 à 3 propositions, de la plus probable à la moins probable. N\'invente rien.';
   let lastErr;
-  for(const m of AI_MODELS){
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{
-      method:"POST",
-      headers:{"content-type":"application/json","x-goog-api-key":getAK()},
-      body:JSON.stringify({
-        contents:[{parts:[{inline_data:{mime_type:"image/jpeg",data:b64}},{text:prompt}]}],
-        generationConfig:{responseMimeType:"application/json",temperature:0}
+  for (const m of MODELS) {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + m + ":generateContent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        contents: [{ parts: [{ inline_data: { mime_type: activeMime, data: activeBase64 } }, { text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0 }
       })
     });
-    if([404,429,500,502,503,504].includes(r.status)){
-  lastErr = new Error(r.status===429 ? "quota atteint (HTTP 429)" : r.status===404 ? "modèle "+m+" introuvable" : "Gemini surchargé (HTTP "+r.status+")");
-  await new Promise(ok=>setTimeout(ok,800));
-  continue;
-}
-    if(!r.ok) throw new Error("HTTP "+r.status);
+    if ([404, 429, 500, 502, 503, 504].includes(r.status)) {
+      lastErr = new Error(r.status === 429 ? "Quota atteint (429)." : r.status === 404 ? "Modèle " + m + " introuvable." : "Gemini surchargé (" + r.status + ").");
+      await new Promise(ok => setTimeout(ok, 800));
+      continue;
+    }
     const d = await r.json();
-    const parts = (((d.candidates||[])[0]||{}).content||{}).parts;
-    const mm = (parts||[]).map(p=>p.text||"").join("").match(/\[[\s\S]*\]/);
-    return mm ? JSON.parse(mm[0]) : [];
+    if (!r.ok) throw new Error("Erreur (" + r.status + ") : " + ((d.error && d.error.message) || "inconnue"));
+    const parts = (((d.candidates || [])[0] || {}).content || {}).parts || [];
+    const txt = parts.map(p => p.text || "").join("");
+    const mm = txt.match(/\{[\s\S]*\}/);
+    if (!mm) throw new Error("Réponse IA illisible.");
+    const list = (JSON.parse(mm[0]).propositions || []).filter(p => p && p.titre);
+    if (!list.length) throw new Error("Aucun jeu reconnu. Essayez une photo plus nette.");
+    return list.slice(0, 3);
   }
-  throw lastErr || new Error("aucun modèle disponible");
+  throw lastErr || new Error("Aucun modèle disponible.");
 }
 
-function findByName(n){ return Object.values(games).find(g=>norm(g.name)===norm(n)); }
-function showDetected(items){
-  const b = $("result"); b.style.display="block"; b.className="";
-  if(!items.length) return showMsg("Aucun jeu reconnu. Essayez une photo plus nette.",true);
-  b._items = items;
-  b.innerHTML = items.map((it,i)=>{
-    const ex = findByName(it.name);
-    return `<div class="det">
-      <div class="name">${esc(it.name)}</div>
-      <div style="color:var(--mute)">${esc(it.console||"Autre")}${ex?" · au catalogue : "+eur(ex.price):""}</div>
-      <div class="row"><input inputmode="decimal" placeholder="Prix €" value="${ex?String(ex.price).replace(".",","):""}"><button type="button" data-add="${i}">Ajouter</button></div></div>`;
-  }).join("");
+async function fetchCover(titre) {
+  const k = (store("rawg_key") || "").trim();
+  if (!k) return null;
+  try {
+    const r = await fetch("https://api.rawg.io/api/games?key=" + encodeURIComponent(k) + "&search=" + encodeURIComponent(titre) + "&search_precise=true&page_size=1");
+    if (!r.ok) return null;
+    const d = await r.json();
+    return (d.results && d.results[0] && d.results[0].background_image) || null;
+  } catch (e) { return null; }
 }
-$("result").addEventListener("click",e=>{
-  const a = e.target.closest("[data-add]"); if(!a) return;
-  const it = $("result")._items[a.dataset.add];
-  const price = parseFloat(a.closest(".det").querySelector("input").value.replace(",","."));
-  if(isNaN(price) || price < 0) return toast("Indiquez un prix valide.");
-  const ex = findByName(it.name), cons = it.console || "Autre";
-  const code = ex ? ex.code : "n:"+norm(it.name)+"|"+cons;
-  games[code] = {name:it.name, code, console:ex?ex.console:cons, price, cover:ex&&ex.cover};
-  persist(); render(); getCover(code);
-  a.textContent = "✓ Ajouté"; a.disabled = true;
+
+$("btn-submit").addEventListener("click", async () => {
+  if (!activeBase64) return;
+  resetBoxes();
+  $("loading-spinner").style.display = "block";
+  $("btn-submit").disabled = true;
+  try {
+    const list = await askGemini();
+    const covers = await Promise.all(list.map(p => fetchCover(p.titre)));
+    proposals = list.map((p, i) => ({ titre: p.titre, console: p.console || "", image_url: covers[i] }));
+    $("v-gallery").innerHTML = proposals.map((p, i) => `
+      <div class="gallery-item ${i === 0 ? "selected" : ""}" data-i="${i}">
+        <input type="radio" name="game-choice" value="${i}" ${i === 0 ? "checked" : ""}>
+        ${p.image_url ? `<img src="${esc(p.image_url)}" alt="jaquette" referrerpolicy="no-referrer">` : `<div class="noimg">Pas d'image</div>`}
+        <span>${esc(p.titre)}</span><small>${esc(p.console)}</small>
+      </div>`).join("");
+    $("v-zone").style.display = "block";
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    $("loading-spinner").style.display = "none";
+    $("btn-submit").disabled = false;
+  }
 });
 
-async function analyzeImage(file, lot){
-  if(!file) return;
-  if(scanning) stopScan();
-  showMsg("Analyse de l'image…");
-  let canvas;
-  try{ canvas = await toCanvas(file,1600); }catch(e){ return showMsg("Image illisible.",true); }
-  if(!lot){
-    let code = await decodeCanvas(canvas);
-    if(!code){ try{ code = await decodeCanvas(await toCanvas(file,900)); }catch(e){} }
-    if(code){ onCode(code); return; }
-  }
-  if(hasAK()){
-    showMsg("Reconnaissance des jeux en cours…");
-    try{ showDetected(await aiIdentify(canvas)); return; }
-    catch(e){ toast("IA indisponible ("+e.message+")."); }
-  }else if(lot){
-    return showMsg("Ajoutez d'abord votre clé Google Gemini (section Reconnaissance IA).",true);
-  }
-  showMsg("Aucun code-barres lu. Lecture du titre en cours (le premier chargement télécharge environ 10 Mo)…");
-  try{ handleTitle(await ocrText(canvas)); }
-  catch(e){ showMsg("Lecture du titre impossible. Essayez une photo plus nette.",true); }
-}
-$("photoBtn").addEventListener("click",()=>$("photoIn").click());
-$("galBtn").addEventListener("click",()=>$("galIn").click());
-$("lotBtn").addEventListener("click",()=>$("lotIn").click());
-["photoIn","galIn"].forEach(id=>$(id).addEventListener("change",e=>{ const f=e.target.files[0]; e.target.value=""; analyzeImage(f); }));
-$("lotIn").addEventListener("change",e=>{ const f=e.target.files[0]; e.target.value=""; analyzeImage(f,true); });
-
-/* ---------- Jaquettes (RAWG) ---------- */
-const RK = "rawg_key";
-const DEFAULT_RK = "COLLE_TA_CLÉ_RAWG_ICI"; // facultatif : remplace le texte entre les guillemets
-const getKey = ()=>{ let k = ""; try{ k = localStorage.getItem(RK)||""; }catch(e){} if(!k && DEFAULT_RK.indexOf("COLLE_TA")!==0) k = DEFAULT_RK; return k; };
-async function fetchCover(name){
-  const r = await fetch(`https://api.rawg.io/api/games?key=${encodeURIComponent(getKey())}&search=${encodeURIComponent(name)}&search_precise=true&page_size=1`);
-  if(!r.ok) throw new Error("HTTP "+r.status);
-  const d = await r.json();
-  return (d.results && d.results[0] && d.results[0].background_image) || null;
-}
-async function getCover(code){
-  const g = games[code]; if(!g || g.cover || !getKey()) return;
-  try{ const u = await fetchCover(g.name); if(u && games[code]){ games[code].cover = u; persist(); render(); } }catch(e){}
-}
-$("rawgKey").value = (()=>{ try{ return localStorage.getItem(RK)||""; }catch(e){ return ""; } })();
-$("rawgSave").addEventListener("click",()=>{
-  try{ localStorage.setItem(RK,$("rawgKey").value.trim()); toast("Clé enregistrée."); }catch(e){ toast("Stockage local indisponible."); }
-});
-$("coverAll").addEventListener("click",async()=>{
-  if(!getKey()) return toast("Enregistrez d'abord votre clé RAWG.");
-  const todo = Object.values(games).filter(g=>!g.cover); let ok = 0;
-  if(!todo.length) return toast("Tous les jeux ont déjà une jaquette.");
-  toast(`Recherche de ${todo.length} jaquette(s)…`);
-  for(const g of todo){
-    try{ const u = await fetchCover(g.name); if(u){ games[g.code].cover = u; ok++; } }
-    catch(e){ toast("Clé RAWG refusée ou réseau indisponible."); break; }
-  }
-  persist(); render(); toast(`${ok} jaquette(s) trouvée(s).`);
+$("v-gallery").addEventListener("click", e => {
+  const item = e.target.closest(".gallery-item"); if (!item) return;
+  document.querySelectorAll(".gallery-item").forEach(el => el.classList.remove("selected"));
+  item.classList.add("selected");
+  item.querySelector("input").checked = true;
 });
 
-document.addEventListener("visibilitychange",()=>{ if(document.hidden && scanning) stopScan(); });
-load(); render();
+$("btn-confirm").addEventListener("click", () => {
+  const sel = document.querySelector('input[name="game-choice"]:checked');
+  if (!sel) return;
+  const game = proposals[sel.value];
+  inventory.push(game);
+  store("gameInventory", JSON.stringify(inventory));
+  renderInventory();
+  $("v-zone").style.display = "none";
+  $("output-success").innerHTML = "🎯 Jeu ajouté à l'inventaire :<br>📁 " + esc(game.titre);
+  $("output-success").style.display = "block";
+});
+
+renderInventory();
 </script>
 </body>
 </html>
