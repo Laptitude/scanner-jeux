@@ -42,12 +42,15 @@ details{border-top:1px solid var(--line)}
 details:first-of-type{border-top:0}
 summary{padding:12px 2px;font-weight:600;cursor:pointer;display:flex;justify-content:space-between}
 summary span{color:var(--mute);font-weight:400}
-.game{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 2px;border-top:1px dashed var(--line)}
+.game{display:grid;grid-template-columns:44px 1fr auto auto;gap:10px;align-items:center;padding:8px 2px;border-top:1px dashed var(--line)}
 .game small{display:block;color:var(--mute)}
 .game b{color:var(--price)}
 .game button{width:auto;padding:6px 10px;background:transparent;color:var(--bad);border:1px solid var(--line)}
 .empty{color:var(--mute);margin:0}
 #toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;display:none;font-size:.9rem}
+.thumb{width:44px;height:44px;border-radius:6px;object-fit:cover;background:var(--bg);border:1px solid var(--line);display:block}
+.found{display:flex;gap:12px;align-items:center}
+.found .thumb{width:64px;height:64px}
 </style>
 </head>
 <body>
@@ -63,6 +66,12 @@ summary span{color:var(--mute);font-weight:400}
       <button id="camSwitch" type="button" class="alt">Changer</button>
     </div>
     <p id="hint">Touchez l'image pour faire la mise au point.</p>
+    <div class="row" style="margin-top:10px">
+      <button id="photoBtn" type="button" class="alt">Prendre une photo</button>
+      <button id="galBtn" type="button" class="alt">Depuis la galerie</button>
+    </div>
+    <input id="photoIn" type="file" accept="image/*" capture="environment" hidden>
+    <input id="galIn" type="file" accept="image/*" hidden>
     <div id="result" role="status" aria-live="polite"></div>
   </section>
 
@@ -74,10 +83,7 @@ summary span{color:var(--mute);font-weight:400}
     <input id="fCode" inputmode="numeric" autocomplete="off" placeholder="Scannez ou collez le code">
     <div class="row">
       <div><label for="fConsole">Support</label>
-        <select id="fConsole">
-          <option>PS5</option><option>PS4</option><option>Switch</option><option>Xbox Series</option>
-          <option>Xbox One</option><option>Wii</option><option>PC</option><option>Rétro</option><option>Autre</option>
-        </select></div>
+        <select id="fConsole"></select></div>
       <div><label for="fPrice">Prix (€)</label>
         <input id="fPrice" inputmode="decimal" placeholder="29,90"></div>
     </div>
@@ -87,6 +93,16 @@ summary span{color:var(--mute);font-weight:400}
   <section>
     <h2>Catalogue <span id="count" style="color:var(--mute);font-weight:400"></span></h2>
     <div id="list"></div>
+  </section>
+
+  <section>
+    <h2>Jaquettes (facultatif)</h2>
+    <label for="rawgKey">Clé API RAWG (gratuite sur rawg.io/apidocs)</label>
+    <input id="rawgKey" autocomplete="off" placeholder="Collez votre clé">
+    <div class="row">
+      <button id="rawgSave" type="button" class="alt">Enregistrer la clé</button>
+      <button id="coverAll" type="button" class="alt">Chercher les jaquettes</button>
+    </div>
   </section>
 
   <section>
@@ -217,11 +233,7 @@ $("video").addEventListener("click", async e=>{
 function onCode(code){
   const box = $("result"), g = games[code];
   box.style.display = "block";
-  if(g){
-    box.className = "";
-    box.innerHTML = `<div class="name">${esc(g.name)}</div><div style="color:var(--mute)">${esc(g.console)}</div><div class="price">${eur(g.price)}</div>`;
-    fillForm(g);
-  }else{
+  if(g){ showFound(g); }else{
     box.className = "unknown";
     box.innerHTML = `<div class="name">Jeu inconnu</div><div style="color:var(--mute)">Code ${esc(code)} : ajoutez-le avec le formulaire ci-dessous.</div>`;
     $("fCode").value = code; $("fName").value = ""; $("fPrice").value = "";
@@ -231,7 +243,7 @@ function onCode(code){
 }
 
 /* ---------- Catalogue ---------- */
-function fillForm(g){ $("fName").value=g.name; $("fCode").value=g.code; $("fConsole").value=g.console; $("fPrice").value=String(g.price).replace(".",","); }
+function fillForm(g){ $("fName").value=g.name; $("fCode").value=g.code; setConsole(g.console); $("fPrice").value=String(g.price).replace(".",","); }
 
 $("saveBtn").addEventListener("click",()=>{
   const name = $("fName").value.trim(), code = $("fCode").value.trim().replace(/\s+/g,"");
@@ -239,8 +251,9 @@ $("saveBtn").addEventListener("click",()=>{
   if(!name) return toast("Indiquez le nom du jeu.");
   if(!code) return toast("Indiquez le code-barres.");
   if(isNaN(price) || price < 0) return toast("Indiquez un prix valide.");
-  games[code] = {name, code, console:$("fConsole").value, price};
-  persist(); render();
+  const old = games[code];
+  games[code] = {name, code, console:$("fConsole").value, price, cover:(old && old.name===name) ? old.cover : undefined};
+  persist(); render(); getCover(code);
   $("fName").value=$("fCode").value=$("fPrice").value="";
   toast("Jeu enregistré.");
 });
@@ -248,7 +261,8 @@ $("saveBtn").addEventListener("click",()=>{
 function render(){
   const list = $("list"), groups = {};
   Object.values(games).forEach(g=>(groups[g.console] ||= []).push(g));
-  const keys = Object.keys(groups).sort((a,b)=>a.localeCompare(b,"fr"));
+  const rank = k=>{ const i=CONSOLES.indexOf(k); return i<0?999:i; };
+  const keys = Object.keys(groups).sort((a,b)=>rank(a)-rank(b)||a.localeCompare(b,"fr"));
   $("count").textContent = Object.keys(games).length ? `(${Object.keys(games).length})` : "";
   if(!keys.length){ list.innerHTML = `<p class="empty">Aucun jeu pour l'instant. Scannez un code-barres ou remplissez le formulaire.</p>`; return; }
   const open = new Set([...list.querySelectorAll("details[open]")].map(d=>d.dataset.k));
@@ -256,7 +270,7 @@ function render(){
     <details data-k="${esc(k)}" ${open.has(k)?"open":""}>
       <summary>${esc(k)} <span>${groups[k].length}</span></summary>
       ${groups[k].sort((a,b)=>a.name.localeCompare(b.name,"fr")).map(g=>`
-        <div class="game">
+        <div class="game">${g.cover?`<img class="thumb" src="${esc(g.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:`<div class="thumb"></div>`}
           <div data-edit="${esc(g.code)}" style="cursor:pointer">${esc(g.name)}<small>${esc(g.code)}</small></div>
           <b>${eur(g.price)}</b>
           <button type="button" data-del="${esc(g.code)}" aria-label="Supprimer ${esc(g.name)}">Suppr.</button>
@@ -285,10 +299,120 @@ $("importFile").addEventListener("change",async e=>{
     const data = JSON.parse(await f.text());
     const items = Array.isArray(data) ? data : Object.values(data);
     let n = 0;
-    items.forEach(g=>{ if(g && g.code && g.name && !isNaN(parseFloat(g.price))){ games[String(g.code)] = {name:String(g.name),code:String(g.code),console:g.console||"Autre",price:parseFloat(g.price)}; n++; } });
+    items.forEach(g=>{ if(g && g.code && g.name && !isNaN(parseFloat(g.price))){ games[String(g.code)] = {name:String(g.name),code:String(g.code),console:g.console||"Autre",price:parseFloat(g.price),cover:g.cover||undefined}; n++; } });
     persist(); render(); toast(`${n} jeu(x) importé(s).`);
   }catch(err){ toast("Fichier de sauvegarde invalide."); }
   e.target.value = "";
+});
+
+/* ---------- Consoles ---------- */
+const CONSOLES = ["PS5","PS4","PS3","PS2","PS1","PSP","PS Vita","Switch","Wii U","Wii","GameCube","Nintendo 64","SNES","NES","3DS","DS","Game Boy / GBA","Xbox Series","Xbox One","Xbox 360","Xbox","Dreamcast","Saturn","Mega Drive","PC","Rétro","Autre"];
+$("fConsole").innerHTML = CONSOLES.map(c=>`<option>${esc(c)}</option>`).join("");
+function setConsole(c){
+  const sel = $("fConsole");
+  if(![...sel.options].some(o=>o.value===c)){ const o=document.createElement("option"); o.textContent=c; sel.appendChild(o); }
+  sel.value = c;
+}
+
+function showMsg(t,bad){ const b=$("result"); b.style.display="block"; b.className = bad?"unknown":""; b.innerHTML=`<div style="color:var(--mute)">${esc(t)}</div>`; }
+function showFound(g){
+  const b = $("result"); b.style.display="block"; b.className="";
+  b.innerHTML = `<div class="found">${g.cover?`<img class="thumb" src="${esc(g.cover)}" alt="" referrerpolicy="no-referrer">`:""}<div><div class="name">${esc(g.name)}</div><div style="color:var(--mute)">${esc(g.console)}</div><div class="price">${eur(g.price)}</div></div></div>`;
+  fillForm(g);
+}
+
+/* ---------- Détection par photo et galerie ---------- */
+const FORMATS = ["ean_13","ean_8","upc_a","upc_e","code_128"];
+async function toCanvas(file,max){
+  let bmp;
+  try{ bmp = await createImageBitmap(file,{imageOrientation:"from-image"}); }
+  catch(e){ bmp = await new Promise((ok,ko)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=ko; i.src=URL.createObjectURL(file); }); }
+  const k = Math.min(1, max/Math.max(bmp.width,bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width*k); c.height = Math.round(bmp.height*k);
+  c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+  return c;
+}
+async function decodeCanvas(c){
+  if("BarcodeDetector" in window){
+    try{ const r = await new BarcodeDetector({formats:FORMATS}).detect(c); if(r.length) return r[0].rawValue; }catch(e){}
+  }
+  if(!window.ZXing) return null;
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.UPC_E,ZXing.BarcodeFormat.CODE_128]);
+  const rd = new ZXing.BrowserMultiFormatReader(hints);
+  try{ return (await rd.decodeFromImageUrl(c.toDataURL("image/jpeg",0.92))).getText(); }
+  catch(e){ return null; }
+  finally{ try{ rd.reset(); }catch(e){} }
+}
+function loadScript(src){ return new Promise((ok,ko)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=ko; document.head.appendChild(s); }); }
+async function ocrText(c){
+  if(!window.Tesseract) await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js");
+  const r = await Tesseract.recognize(c,"fra+eng");
+  return r.data.text || "";
+}
+const norm = t=>t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();
+function handleTitle(text){
+  const lines = text.split("\n").map(l=>l.replace(/[^\wÀ-ÿ'’:&!?. -]/g," ").replace(/\s+/g," ").trim())
+    .filter(l=>l.replace(/[^A-Za-zÀ-ÿ0-9]/g,"").length>=4);
+  if(!lines.length) return showMsg("Aucun texte lisible. Rapprochez-vous du titre ou du code-barres.",true);
+  const words = new Set(norm(text).split(" ").filter(w=>w.length>2));
+  let best=null, score=0;
+  Object.values(games).forEach(g=>{
+    const t = norm(g.name).split(" ").filter(w=>w.length>2); if(!t.length) return;
+    const sc = t.filter(w=>words.has(w)).length/t.length;
+    if(sc>score){ score=sc; best=g; }
+  });
+  if(best && score>=0.6){ showFound(best); toast("Titre reconnu dans le catalogue."); return; }
+  const guess = lines.sort((a,b)=>b.length-a.length)[0].slice(0,60);
+  $("fName").value = guess; $("fCode").value=""; $("fPrice").value="";
+  showMsg(`Titre lu : « ${guess} ». Vérifiez le nom, ajoutez le code-barres et le prix.`);
+}
+async function analyzeImage(file){
+  if(!file) return;
+  if(scanning) stopScan();
+  showMsg("Analyse de l'image…");
+  let canvas;
+  try{ canvas = await toCanvas(file,1600); }catch(e){ return showMsg("Image illisible.",true); }
+  let code = await decodeCanvas(canvas);
+  if(!code){ try{ code = await decodeCanvas(await toCanvas(file,900)); }catch(e){} }
+  if(code){ onCode(code); return; }
+  showMsg("Aucun code-barres lu. Lecture du titre en cours (le premier chargement télécharge environ 10 Mo)…");
+  try{ handleTitle(await ocrText(canvas)); }
+  catch(e){ showMsg("Lecture du titre impossible. Essayez une photo plus nette du code-barres.",true); }
+}
+$("photoBtn").addEventListener("click",()=>$("photoIn").click());
+$("galBtn").addEventListener("click",()=>$("galIn").click());
+["photoIn","galIn"].forEach(id=>$(id).addEventListener("change",e=>{ const f=e.target.files[0]; e.target.value=""; analyzeImage(f); }));
+
+/* ---------- Jaquettes (RAWG) ---------- */
+const RK = "rawg_key";
+const getKey = ()=>{ try{ return localStorage.getItem(RK)||""; }catch(e){ return ""; } };
+async function fetchCover(name){
+  const r = await fetch(`https://api.rawg.io/api/games?key=${encodeURIComponent(getKey())}&search=${encodeURIComponent(name)}&search_precise=true&page_size=1`);
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const d = await r.json();
+  return (d.results && d.results[0] && d.results[0].background_image) || null;
+}
+async function getCover(code){
+  const g = games[code]; if(!g || g.cover || !getKey()) return;
+  try{ const u = await fetchCover(g.name); if(u && games[code]){ games[code].cover = u; persist(); render(); } }catch(e){}
+}
+$("rawgKey").value = getKey();
+$("rawgSave").addEventListener("click",()=>{
+  try{ localStorage.setItem(RK,$("rawgKey").value.trim()); toast("Clé enregistrée."); }catch(e){ toast("Stockage local indisponible."); }
+});
+$("coverAll").addEventListener("click",async()=>{
+  if(!getKey()) return toast("Enregistrez d'abord votre clé RAWG.");
+  const todo = Object.values(games).filter(g=>!g.cover); let ok = 0;
+  if(!todo.length) return toast("Tous les jeux ont déjà une jaquette.");
+  toast(`Recherche de ${todo.length} jaquette(s)…`);
+  for(const g of todo){
+    try{ const u = await fetchCover(g.name); if(u){ games[g.code].cover = u; ok++; } }
+    catch(e){ toast("Clé RAWG refusée ou réseau indisponible."); break; }
+  }
+  persist(); render(); toast(`${ok} jaquette(s) trouvée(s).`);
 });
 
 document.addEventListener("visibilitychange",()=>{ if(document.hidden && scanning) stopScan(); });
