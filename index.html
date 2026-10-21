@@ -409,18 +409,19 @@ function handleTitle(data){
     return;
   }
 
-  const cand = (data.lines||[])
-    .map(l=>({t:clean(l.text), h:l.bbox.y1-l.bbox.y0, c:l.confidence}))
-    .filter(l=>l.c>=60 && l.t.replace(/[^A-Za-zÀ-ÿ0-9]/g,"").length>=3 && !BAD.test(l.t))
-    .sort((a,b)=>b.h-a.h);
-  const guess = (cand[0] ? cand[0].t : lines.sort((a,b)=>b.length-a.length)[0]).slice(0,60);
+  const big = (data.lines||[])
+  .map(l=>({t:clean(l.text), h:l.bbox.y1-l.bbox.y0, y:l.bbox.y0, c:l.confidence}))
+  .filter(l=>l.c>=60 && l.t.replace(/[^A-Za-zÀ-ÿ0-9]/g,"").length>=3 && !BAD.test(l.t));
+const maxH = Math.max(0, ...big.map(l=>l.h));
+const guess = (big.length
+  ? big.filter(l=>l.h>=maxH*0.5).sort((a,b)=>a.y-b.y).map(l=>l.t).join(" ")
+  : lines.sort((a,b)=>b.length-a.length)[0]).slice(0,60);
   $("fName").value = guess; $("fCode").value=""; $("fPrice").value="";
   showMsg(`Titre lu : « ${guess} ». Vérifiez le nom, ajoutez le code-barres et le prix.`);
 }
 
 /* ---------- Reconnaissance IA (Google Gemini : jaquette, tranche, lot) ---------- */
-const AK = "gemini_key";
-const DEFAULT_AK = "COLLE_TA_CLÉ_GEMINI_ICI"; // remplace le texte entre les guillemets par ta clé
+const AK = "cleapi"; // remplace le texte entre les guillemets par ta clé
 const getAK = ()=>{ try{ return localStorage.getItem(AK)||DEFAULT_AK; }catch(e){ return DEFAULT_AK; } };
 const hasAK = ()=>{ const k = getAK(); return !!k && k.indexOf("COLLE_TA")!==0; };
 const AI_MODELS = ["gemini-3.1-flash-lite","gemini-3.5-flash","gemini-2.5-flash"];
