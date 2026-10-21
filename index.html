@@ -23,7 +23,16 @@ label{display:block;font-size:.85rem;color:var(--mute);margin-bottom:3px}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 #cam{display:none;margin-top:12px;position:relative;border-radius:var(--r);overflow:hidden;background:#000}
 #cam video{width:100%;display:block;max-height:300px;object-fit:cover}
-#cam::after{content:"";position:absolute;left:8%;right:8%;top:50%;height:2px;background:#ff3b30;box-shadow:0 0 8px #ff3b30}
+#cam::after{content:"";position:absolute;left:8%;right:8%;top:50%;height:2px;background:#ff3b30;box-shadow:0 0 8px #ff3b30;pointer-events:none}
+#cam video{cursor:crosshair;touch-action:manipulation}
+#ring{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;border:2px solid #ffd60a;border-radius:50%;pointer-events:none;opacity:0}
+#ring.on{animation:ring .9s ease-out}
+@keyframes ring{0%{opacity:1;transform:scale(1.6)}40%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){#ring.on{animation:none;opacity:1}}
+#camTools{display:none;margin-top:10px;grid-template-columns:1fr auto;gap:10px;align-items:start}
+#camTools select{margin:0}
+#camTools button{width:auto}
+#hint{display:none;margin:8px 0 0;font-size:.85rem;color:var(--mute)}
 #result{margin-top:12px;display:none;padding:12px;border-radius:var(--r);border:1px solid var(--line)}
 #result .name{font-weight:700}
 #result .price{color:var(--price);font-size:1.8rem;font-weight:800}
@@ -48,7 +57,12 @@ summary span{color:var(--mute);font-weight:400}
   <section>
     <h2>Scanner un code-barres</h2>
     <button id="scanBtn" type="button">Activer la caméra</button>
-    <div id="cam"><video id="video" playsinline muted autoplay webkit-playsinline></video></div>
+    <div id="cam"><video id="video" playsinline muted autoplay webkit-playsinline></video><div id="ring"></div></div>
+    <div id="camTools">
+      <select id="camSelect" aria-label="Choisir la caméra"></select>
+      <button id="camSwitch" type="button" class="alt">Changer</button>
+    </div>
+    <p id="hint">Touchez l'image pour faire la mise au point.</p>
     <div id="result" role="status" aria-live="polite"></div>
   </section>
 
@@ -98,16 +112,37 @@ const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 let tt; function toast(m){ const t=$("toast"); t.textContent=m; t.style.display="block"; clearTimeout(tt); tt=setTimeout(()=>t.style.display="none",2600); }
 
 /* ---------- Scanner ---------- */
-let reader = null, scanning = false;
+let reader = null, scanning = false, cams = [], noFocusWarned = false;
+const PREF = "camera_pref";
+function getPref(){ try{ return localStorage.getItem(PREF); }catch(e){ return null; } }
+function setPref(id){ try{ localStorage.setItem(PREF,id); }catch(e){} }
+
 function stopScan(){
   if(reader){ try{ reader.reset(); }catch(e){} reader = null; }
   const v = $("video");
   if(v.srcObject){ v.srcObject.getTracks().forEach(t=>t.stop()); v.srcObject = null; }
   $("cam").style.display = "none";
+  $("camTools").style.display = "none";
+  $("hint").style.display = "none";
   $("scanBtn").textContent = "Activer la caméra";
   scanning = false;
 }
-async function startScan(){
+
+function track(){ const s = $("video").srcObject; return s && s.getVideoTracks()[0]; }
+
+async function listCameras(){
+  try{
+    const all = await navigator.mediaDevices.enumerateDevices();
+    cams = all.filter(d=>d.kind==="videoinput");
+  }catch(e){ cams = []; }
+  const sel = $("camSelect"), cur = track() && track().getSettings().deviceId;
+  sel.innerHTML = cams.map((c,i)=>`<option value="${esc(c.deviceId)}">${esc(c.label || "Caméra "+(i+1))}</option>`).join("");
+  if(cur) sel.value = cur;
+  $("camSwitch").style.display = cams.length > 1 ? "" : "none";
+  sel.style.display = cams.length > 1 ? "" : "none";
+}
+
+async function startScan(deviceId){
   if(!window.ZXing){ toast("Bibliothèque de scan non chargée. Vérifiez la connexion."); return; }
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ toast("Caméra indisponible (page en HTTPS requise)."); return; }
   const v = $("video");
@@ -119,17 +154,65 @@ async function startScan(){
   hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.UPC_E,ZXing.BarcodeFormat.CODE_128]);
   hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
   reader = new ZXing.BrowserMultiFormatReader(hints, 300);
+  const id = deviceId || getPref();
+  const base = {width:{ideal:1280},height:{ideal:720}};
+  const tryStart = async (video)=>reader.decodeFromConstraints({video:{...base,...video}}, v,
+      (res)=>{ if(res && scanning){ const code = res.getText(); stopScan(); onCode(code); } });
   try{
-    await reader.decodeFromConstraints(
-      {video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}}, v,
-      (res)=>{ if(res && scanning){ const code = res.getText(); stopScan(); onCode(code); } }
-    );
+    try{ await tryStart(id ? {deviceId:{exact:id}} : {facingMode:{ideal:"environment"}}); }
+    catch(err){
+      if(id && err && (err.name==="OverconstrainedError"||err.name==="NotFoundError")){ reader.reset(); reader = new ZXing.BrowserMultiFormatReader(hints,300); await tryStart({facingMode:{ideal:"environment"}}); }
+      else throw err;
+    }
+    const t = track();
+    if(t){ const cur = t.getSettings().deviceId; if(cur) setPref(cur); }
+    await listCameras();          // les noms des caméras n'apparaissent qu'après l'autorisation
+    $("camTools").style.display = "grid";
+    $("hint").style.display = "block";
   }catch(e){
     stopScan();
     toast(e && e.name==="NotAllowedError" ? "Accès à la caméra refusé." : "Impossible d'ouvrir la caméra.");
   }
 }
+
+function switchTo(id){ stopScan(); startScan(id); }
 $("scanBtn").addEventListener("click",()=>scanning?stopScan():startScan());
+$("camSelect").addEventListener("change",e=>switchTo(e.target.value));
+$("camSwitch").addEventListener("click",()=>{
+  if(cams.length < 2) return;
+  const cur = $("camSelect").value, i = cams.findIndex(c=>c.deviceId===cur);
+  switchTo(cams[(i+1)%cams.length].deviceId);
+});
+
+/* Mise au point au toucher */
+$("video").addEventListener("click", async e=>{
+  const v = $("video"), r = v.getBoundingClientRect(), t = track();
+  if(!t || !v.videoWidth) return;
+  const ring = $("ring"), cr = $("cam").getBoundingClientRect();
+  ring.style.left = (e.clientX-cr.left)+"px"; ring.style.top = (e.clientY-cr.top)+"px";
+  ring.classList.remove("on"); void ring.offsetWidth; ring.classList.add("on");
+
+  const sc = Math.max(r.width/v.videoWidth, r.height/v.videoHeight);
+  const offX = (v.videoWidth*sc - r.width)/2, offY = (v.videoHeight*sc - r.height)/2;
+  const x = Math.min(1,Math.max(0,(e.clientX-r.left+offX)/(v.videoWidth*sc)));
+  const y = Math.min(1,Math.max(0,(e.clientY-r.top+offY)/(v.videoHeight*sc)));
+
+  const caps = (t.getCapabilities && t.getCapabilities()) || {};
+  const modes = caps.focusMode || [];
+  if(!modes.length){
+    if(!noFocusWarned){ noFocusWarned = true; toast("Cet appareil gère la mise au point automatiquement."); }
+    return;
+  }
+  const mode = modes.includes("single-shot") ? "single-shot" : (modes.includes("continuous") ? "continuous" : modes[0]);
+  try{
+    await t.applyConstraints({advanced:[{focusMode:mode, pointsOfInterest:[{x,y}]}]});
+  }catch(err){
+    try{ await t.applyConstraints({advanced:[{focusMode:mode}]}); }catch(e2){}
+  }
+  if(mode==="single-shot" && modes.includes("continuous")){
+    setTimeout(()=>{ if(track()===t){ t.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{}); } }, 3000);
+  }
+});
 
 function onCode(code){
   const box = $("result"), g = games[code];
