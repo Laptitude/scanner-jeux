@@ -47,7 +47,7 @@ summary span{color:var(--mute);font-weight:400}
 .game b{color:var(--price)}
 .game button{width:auto;padding:6px 10px;background:transparent;color:var(--bad);border:1px solid var(--line)}
 .empty{color:var(--mute);margin:0}
-#toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;display:none;font-size:.9rem;max-width:90vw;text-align:center}
+#toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;display:none;font-size:.9rem;max-width:90vw;text-align:center;z-index:10}
 .thumb{width:44px;height:44px;border-radius:6px;object-fit:cover;background:var(--bg);border:1px solid var(--line);display:block}
 .found{display:flex;gap:12px;align-items:center}
 .found .thumb{width:64px;height:64px}
@@ -55,7 +55,38 @@ summary span{color:var(--mute);font-weight:400}
 .det:first-child{border-top:0}
 .det .row{margin-top:6px}
 .det input{margin:0}
-.ebay{display:inline-block;margin-top:8px;padding:8px 12px;border:1px solid var(--accent);border-radius:var(--r);color:var(--accent);font-weight:600;font-size:.9rem;text-decoration:none}
+.ebay{display:inline-block;margin-top:8px;margin-right:6px;padding:8px 12px;border:1px solid var(--accent);border-radius:var(--r);color:var(--accent);font-weight:600;font-size:.9rem;text-decoration:none}
+
+/* ---------- Mode multi ---------- */
+#multiSec{display:none}
+#multiStatus{color:var(--mute);margin:0 0 10px}
+#multiOut{display:none}
+#stage{position:relative;margin:10px 0;border-radius:var(--r);overflow:hidden;background:#000;touch-action:manipulation}
+#stage img{width:100%;display:block}
+.bx{position:absolute;border:2px solid #ffd60a;border-radius:4px;background:rgba(255,214,10,.14);cursor:pointer;transition:opacity .15s}
+.bx i{position:absolute;top:-2px;left:-2px;background:#ffd60a;color:#000;font:700 11px/1 system-ui,sans-serif;padding:3px 5px;border-radius:3px 0 3px 0}
+.bx.known{border-color:#3ddc84;background:rgba(61,220,132,.16)}
+.bx.known i{background:#3ddc84}
+#stage.dim .bx{opacity:.2}
+#stage.dim .bx.hit{opacity:1;border-width:4px;border-color:#ff3b30;background:rgba(255,59,48,.18);animation:pulse 1s ease-in-out infinite;z-index:2}
+#stage.dim .bx.hit i{background:#ff3b30;color:#fff}
+@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(255,59,48,.4)}}
+@media (prefers-reduced-motion:reduce){#stage.dim .bx.hit{animation:none}}
+.legend{font-size:.8rem;color:var(--mute);margin:0 0 10px}
+.mi{display:grid;grid-template-columns:30px 1fr;gap:10px;padding:10px 0;border-top:1px dashed var(--line)}
+.mi:first-child{border-top:0}
+.mi.sel{background:rgba(255,59,48,.08);border-radius:var(--r)}
+.num{width:28px;height:28px;border-radius:50%;background:#ffd60a;color:#000;font-weight:800;font-size:.85rem;display:flex;align-items:center;justify-content:center}
+.mi.known .num{background:#3ddc84}
+.mi .focus{cursor:pointer}
+.mi .name{font-weight:700}
+.mi .row{margin-top:8px}
+.mi input{margin:0}
+.scan{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;padding:8px 0;border-top:1px dashed var(--line)}
+.scan img{width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.scan .open{cursor:pointer}
+.scan small{display:block;color:var(--mute)}
+.scan button{width:auto;padding:6px 10px;background:transparent;color:var(--bad);border:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -76,10 +107,25 @@ summary span{color:var(--mute);font-weight:400}
       <button id="galBtn" type="button" class="alt">Depuis la galerie</button>
     </div>
     <button id="lotBtn" type="button" style="margin-top:10px">Jaquette / tranche / lot (IA)</button>
+    <button id="multiBtn" type="button" style="margin-top:10px">Multi : repérer tous les jeux d'une photo</button>
     <input id="photoIn" type="file" accept="image/*" capture="environment" hidden>
     <input id="galIn" type="file" accept="image/*" hidden>
     <input id="lotIn" type="file" accept="image/*" hidden>
+    <input id="multiIn" type="file" accept="image/*" hidden>
     <div id="result" role="status" aria-live="polite"></div>
+  </section>
+
+  <section id="multiSec">
+    <h2>Mode multi</h2>
+    <p id="multiStatus" role="status" aria-live="polite"></p>
+    <div id="multiOut">
+      <label for="multiFind">Retrouver un jeu sur la photo (en direct)</label>
+      <input id="multiFind" autocomplete="off" placeholder="Tapez un nom : zelda, fifa, mario…">
+      <div id="stage"><img id="stageImg" alt="Photo analysée avec les jeux repérés"><div id="boxes"></div></div>
+      <p class="legend">Vert : déjà au catalogue · Jaune : nouveau · Rouge clignotant : le jeu que vous cherchez. Touchez un cadre ou une ligne pour le localiser.</p>
+      <div id="multiList"></div>
+    </div>
+    <div id="scans"></div>
   </section>
 
   <section>
@@ -138,6 +184,7 @@ const $ = id => document.getElementById(id);
 const eur = n => Number(n).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
 const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const ebayLink = (name,cons)=>`<a class="ebay" target="_blank" rel="noopener" href="https://www.ebay.fr/sch/i.html?_nkw=${encodeURIComponent(name+" "+(cons&&cons!=="Autre"?cons:""))}&LH_Sold=1&LH_Complete=1">Prix réels eBay (vendus)</a>`;
+const vintedLink = (name,cons)=>`<a class="ebay" target="_blank" rel="noopener" href="https://www.vinted.fr/catalog?search_text=${encodeURIComponent(name+" "+(cons&&cons!=="Autre"?cons:""))}">Vinted</a>`;
 let tt; function toast(m){ const t=$("toast"); t.textContent=m; t.style.display="block"; clearTimeout(tt); tt=setTimeout(()=>t.style.display="none",2800); }
 
 /* Un code-barres numérique est toujours stocké en EAN-13 (UPC-A 12 chiffres => préfixe 0) */
@@ -315,7 +362,7 @@ function render(){
 }
 $("list").addEventListener("click",e=>{
   const d = e.target.closest("[data-del]"), ed = e.target.closest("[data-edit]");
-  if(d){ const g = games[d.dataset.del]; if(g && confirm(`Supprimer « ${g.name} » ?`)){ delete games[g.code]; persist(); render(); } }
+  if(d){ const g = games[d.dataset.del]; if(g && confirm(`Supprimer « ${g.name} » ?`)){ delete games[g.code]; persist(); render(); if(multi) renderMulti(); } }
   else if(ed){ fillForm(games[ed.dataset.edit]); $("fName").scrollIntoView({behavior:"smooth",block:"center"}); }
 });
 
@@ -353,7 +400,7 @@ function setConsole(c){
 function showMsg(t,bad){ const b=$("result"); b.style.display="block"; b.className = bad?"unknown":""; b.innerHTML=`<div style="color:var(--mute)">${esc(t)}</div>`; }
 function showFound(g){
   const b = $("result"); b.style.display="block"; b.className="";
-  b.innerHTML = `<div class="found">${g.cover?`<img class="thumb" src="${esc(g.cover)}" alt="" referrerpolicy="no-referrer">`:""}<div><div class="name">${esc(g.name)}</div><div style="color:var(--mute)">${esc(g.console)}</div><div class="price">${eur(g.price)}</div>${ebayLink(g.name,g.console)}</div></div>`;
+  b.innerHTML = `<div class="found">${g.cover?`<img class="thumb" src="${esc(g.cover)}" alt="" referrerpolicy="no-referrer">`:""}<div><div class="name">${esc(g.name)}</div><div style="color:var(--mute)">${esc(g.console)}</div><div class="price">${eur(g.price)}</div>${ebayLink(g.name,g.console)}${vintedLink(g.name,g.console)}</div></div>`;
   fillForm(g);
 }
 
@@ -368,6 +415,14 @@ async function toCanvas(file,max){
   c.width = Math.round(bmp.width*k); c.height = Math.round(bmp.height*k);
   c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
   return c;
+}
+function shrink(c,max){
+  const k = Math.min(1, max/Math.max(c.width,c.height));
+  if(k>=1) return c;
+  const o = document.createElement("canvas");
+  o.width = Math.round(c.width*k); o.height = Math.round(c.height*k);
+  o.getContext("2d").drawImage(c,0,0,o.width,o.height);
+  return o;
 }
 async function decodeCanvas(c){
   if("BarcodeDetector" in window){
@@ -433,9 +488,9 @@ $("aiSave").addEventListener("click",()=>{
   try{ localStorage.setItem(AK,$("aiKey").value.trim()); toast("Clé enregistrée."); }catch(e){ toast("Stockage local indisponible."); }
 });
 
-async function aiIdentify(canvas){
+/* Appel générique Gemini : image + consigne => tableau JSON */
+async function aiCall(canvas, prompt){
   const b64 = canvas.toDataURL("image/jpeg",0.85).split(",")[1];
-  const prompt = `Cette photo montre un ou plusieurs jeux vidéo : jaquette de face, dos, tranche, ou lot en pile ou sur étagère. Identifie chaque exemplaire visible. Réponds UNIQUEMENT par un tableau JSON : [{"name":"titre officiel complet","console":"..."}]. Pour "console", choisis dans : ${CONSOLES.join(", ")}. Sur une tranche, utilise le bandeau ou le logo de la console. N'invente rien : ignore ce qui est illisible.`;
   let lastErr;
   for(const m of AI_MODELS){
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{
@@ -460,6 +515,11 @@ async function aiIdentify(canvas){
   throw lastErr || new Error("aucun modèle disponible");
 }
 
+function aiIdentify(canvas){
+  const prompt = `Cette photo montre un ou plusieurs jeux vidéo : jaquette de face, dos, tranche, ou lot en pile ou sur étagère. Identifie chaque exemplaire visible. Réponds UNIQUEMENT par un tableau JSON : [{"name":"titre officiel complet","console":"..."}]. Pour "console", choisis dans : ${CONSOLES.join(", ")}. Sur une tranche, utilise le bandeau ou le logo de la console. N'invente rien : ignore ce qui est illisible.`;
+  return aiCall(canvas, prompt);
+}
+
 function findByName(n){ return Object.values(games).find(g=>norm(g.name)===norm(n)); }
 function showDetected(items){
   const b = $("result"); b.style.display="block"; b.className="";
@@ -470,19 +530,24 @@ function showDetected(items){
     return `<div class="det">
       <div class="name">${esc(it.name)}</div>
       <div style="color:var(--mute)">${esc(it.console||"Autre")}${ex?" · au catalogue : "+eur(ex.price):""}</div>
-      ${ebayLink(it.name,it.console)}
+      ${ebayLink(it.name,it.console)}${vintedLink(it.name,it.console)}
       <div class="row"><input inputmode="decimal" placeholder="Prix €" value="${ex?String(ex.price).replace(".",","):""}"><button type="button" data-add="${i}">Ajouter</button></div></div>`;
   }).join("");
+}
+
+/* Ajout d'un jeu détecté par l'IA au catalogue */
+function addDetected(it, price){
+  const ex = findByName(it.name), cons = it.console || "Autre";
+  const code = ex ? ex.code : "n:"+norm(it.name)+"|"+cons;
+  games[code] = {name:it.name, code, console:ex?ex.console:cons, price, cover:ex&&ex.cover};
+  persist(); render(); getCover(code);
 }
 $("result").addEventListener("click",e=>{
   const a = e.target.closest("[data-add]"); if(!a) return;
   const it = $("result")._items[a.dataset.add];
   const price = parseFloat(a.closest(".det").querySelector("input").value.replace(",","."));
   if(isNaN(price) || price < 0) return toast("Indiquez un prix valide.");
-  const ex = findByName(it.name), cons = it.console || "Autre";
-  const code = ex ? ex.code : "n:"+norm(it.name)+"|"+cons;
-  games[code] = {name:it.name, code, console:ex?ex.console:cons, price, cover:ex&&ex.cover};
-  persist(); render(); getCover(code);
+  addDetected(it, price);
   a.textContent = "✓ Ajouté"; a.disabled = true;
 });
 
@@ -513,6 +578,155 @@ $("galBtn").addEventListener("click",()=>$("galIn").click());
 $("lotBtn").addEventListener("click",()=>$("lotIn").click());
 ["photoIn","galIn"].forEach(id=>$(id).addEventListener("change",e=>{ const f=e.target.files[0]; e.target.value=""; analyzeImage(f); }));
 $("lotIn").addEventListener("change",e=>{ const f=e.target.files[0]; e.target.value=""; analyzeImage(f,true); });
+
+/* ---------- Mode multi : repérage de tous les jeux d'une photo ---------- */
+const MK = "multi_scans_v1", MAX_SCANS = 6;
+let multi = null;   // {img, items:[{name,console,box:[ymin,xmin,ymax,xmax]}]}
+let selIdx = -1;    // jeu sélectionné (toucher)
+let scans = [];     // photos sauvegardées
+try{ scans = JSON.parse(localStorage.getItem(MK)) || []; }catch(e){ scans = []; }
+function persistScans(){
+  while(scans.length){
+    try{ localStorage.setItem(MK, JSON.stringify(scans)); return; }
+    catch(e){ scans.pop(); toast("Stockage plein : plus ancienne photo retirée."); }
+  }
+  try{ localStorage.removeItem(MK); }catch(e){}
+}
+
+function findLoose(n){
+  const k = norm(n); if(!k) return null;
+  return Object.values(games).find(g=>norm(g.name)===k)
+      || Object.values(games).find(g=>{ const x = norm(g.name); return x.length>3 && (x.includes(k) || k.includes(x)); })
+      || null;
+}
+
+function cleanBox(b){
+  if(!Array.isArray(b) || b.length!==4) return null;
+  let [y0,x0,y1,x1] = b.map(Number);
+  if([y0,x0,y1,x1].some(isNaN)) return null;
+  const c = v=>Math.min(1000,Math.max(0,v));
+  y0=c(y0); x0=c(x0); y1=c(y1); x1=c(x1);
+  if(y1<y0) [y0,y1]=[y1,y0];
+  if(x1<x0) [x0,x1]=[x1,x0];
+  if(y1-y0<5 || x1-x0<5) return null;
+  return [y0,x0,y1,x1];
+}
+
+function openMulti(){ $("multiSec").style.display = "block"; }
+
+function renderScans(){
+  const box = $("scans");
+  if(!scans.length){ box.innerHTML = ""; return; }
+  box.innerHTML = `<h2 style="margin-top:14px">Mes photos scannées</h2>` + scans.map(s=>`
+    <div class="scan">
+      <img src="${esc(s.img)}" alt="">
+      <div class="open" data-open="${esc(s.id)}">${s.items.length} jeu(x)<small>${esc(new Date(s.date).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"}))}</small></div>
+      <button type="button" data-delscan="${esc(s.id)}">Suppr.</button>
+    </div>`).join("");
+}
+
+function renderMulti(){
+  if(!multi){ $("multiOut").style.display = "none"; return; }
+  $("multiOut").style.display = "block";
+  $("stageImg").src = multi.img;
+  $("boxes").innerHTML = multi.items.map((it,i)=>{
+    const [y0,x0,y1,x1] = it.box, known = !!findLoose(it.name);
+    return `<div class="bx${known?" known":""}" data-i="${i}" style="top:${y0/10}%;left:${x0/10}%;height:${(y1-y0)/10}%;width:${(x1-x0)/10}%"><i>${i+1}</i></div>`;
+  }).join("");
+  $("multiList").innerHTML = multi.items.map((it,i)=>{
+    const ex = findLoose(it.name);
+    return `<div class="mi${ex?" known":""}" data-row="${i}">
+      <div class="num">${i+1}</div>
+      <div>
+        <div class="focus" data-focus="${i}"><div class="name">${esc(it.name)}</div>
+        <div style="color:var(--mute)">${esc(it.console||"Autre")}${ex?" · au catalogue : <b style='color:var(--price)'>"+eur(ex.price)+"</b>":""}</div></div>
+        <div>${ebayLink(it.name,it.console)}${vintedLink(it.name,it.console)}</div>
+        <div class="row"><input inputmode="decimal" placeholder="Prix €" aria-label="Prix de ${esc(it.name)}" value="${ex?String(ex.price).replace(".",","):""}"><button type="button" data-madd="${i}">${ex?"Mettre à jour":"Ajouter"}</button></div>
+      </div></div>`;
+  }).join("");
+  applyHighlight();
+}
+
+/* Surbrillance en direct : sélection par toucher ou recherche au clavier */
+function applyHighlight(){
+  if(!multi) return;
+  const q = norm($("multiFind").value), qt = q ? q.split(" ") : [];
+  const hits = new Set();
+  if(selIdx >= 0) hits.add(selIdx);
+  else if(qt.length) multi.items.forEach((it,i)=>{ const n = norm(it.name+" "+(it.console||"")); if(qt.every(w=>n.includes(w))) hits.add(i); });
+  $("stage").classList.toggle("dim", hits.size>0);
+  document.querySelectorAll("#boxes .bx").forEach(b=>b.classList.toggle("hit", hits.has(+b.dataset.i)));
+  document.querySelectorAll("#multiList .mi").forEach(r=>r.classList.toggle("sel", hits.has(+r.dataset.row)));
+  if(qt.length && selIdx<0) $("multiStatus").textContent = hits.size ? `${hits.size} correspondance(s) sur la photo.` : "Aucun jeu correspondant sur cette photo.";
+  else if(multi) $("multiStatus").textContent = `${multi.items.length} jeu(x) repéré(s).`;
+}
+function select(i, scrollTo){
+  selIdx = (selIdx===i) ? -1 : i;
+  applyHighlight();
+  if(selIdx>=0){
+    if(scrollTo==="stage") $("stage").scrollIntoView({behavior:"smooth",block:"center"});
+    else if(scrollTo==="row"){ const r = document.querySelector(`#multiList [data-row="${i}"]`); if(r) r.scrollIntoView({behavior:"smooth",block:"center"}); }
+  }
+}
+$("multiFind").addEventListener("input",()=>{ selIdx = -1; applyHighlight(); });
+$("boxes").addEventListener("click",e=>{ const b = e.target.closest(".bx"); if(b) select(+b.dataset.i,"row"); });
+$("multiList").addEventListener("click",e=>{
+  const add = e.target.closest("[data-madd]");
+  if(add){
+    const i = +add.dataset.madd, it = multi.items[i];
+    const price = parseFloat(add.closest(".mi").querySelector("input").value.replace(",","."));
+    if(isNaN(price) || price < 0) return toast("Indiquez un prix valide.");
+    addDetected(it, price);
+    toast("Enregistré au catalogue.");
+    renderMulti();
+    return;
+  }
+  const f = e.target.closest("[data-focus]");
+  if(f) select(+f.dataset.focus,"stage");
+});
+
+$("scans").addEventListener("click",e=>{
+  const o = e.target.closest("[data-open]"), d = e.target.closest("[data-delscan]");
+  if(o){ const s = scans.find(x=>x.id===o.dataset.open); if(s){ multi = {img:s.img, items:s.items}; selIdx = -1; $("multiFind").value = ""; renderMulti(); $("stage").scrollIntoView({behavior:"smooth",block:"center"}); } }
+  else if(d && confirm("Supprimer cette photo scannée ?")){
+    scans = scans.filter(x=>x.id!==d.dataset.delscan); persistScans(); renderScans();
+    if(!scans.length && multi && multi.saved===d.dataset.delscan){ multi = null; renderMulti(); }
+  }
+});
+
+async function multiScan(file){
+  if(!file) return;
+  if(scanning) stopScan();
+  openMulti();
+  $("multiSec").scrollIntoView({behavior:"smooth",block:"start"});
+  if(!hasAK()){ multi = null; renderMulti(); $("multiStatus").textContent = "Ajoutez d'abord votre clé Google Gemini (section Reconnaissance IA)."; return; }
+  $("multiOut").style.display = "none";
+  $("multiStatus").textContent = "Analyse de la photo : repérage de chaque jeu…";
+  let canvas;
+  try{ canvas = await toCanvas(file,1600); }catch(e){ $("multiStatus").textContent = "Image illisible."; return; }
+  const prompt = `Cette photo montre plusieurs jeux vidéo (pile, étagère, rangée de tranches, jaquettes côte à côte). Repère CHAQUE exemplaire visible, même partiellement, et donne sa position. Réponds UNIQUEMENT par un tableau JSON : [{"name":"titre officiel complet","console":"...","box_2d":[ymin,xmin,ymax,xmax]}]. Les coordonnées de box_2d sont des entiers de 0 à 1000, relatifs à l'image entière (0,0 = coin haut-gauche ; 1000,1000 = coin bas-droit). Une seule boîte par exemplaire, qui l'entoure au plus près (toute la jaquette ou toute la tranche). Pour "console", choisis dans : ${CONSOLES.join(", ")}. Sur une tranche, utilise le bandeau ou le logo de la console. N'invente rien : ignore ce qui est illisible.`;
+  try{
+    const raw = await aiCall(canvas, prompt);
+    const items = raw.map(r=>({name:String(r.name||"").trim(), console:String(r.console||"Autre"), box:cleanBox(r.box_2d)}))
+                     .filter(r=>r.name && r.box);
+    if(!items.length){ multi = null; renderMulti(); $("multiStatus").textContent = "Aucun jeu repéré. Essayez une photo plus nette ou plus proche."; return; }
+    items.sort((a,b)=>(a.box[0]+a.box[2])/2 - (b.box[0]+b.box[2])/2 || a.box[1]-b.box[1]); // haut → bas, gauche → droite
+    const small = shrink(canvas,1100).toDataURL("image/jpeg",0.7);
+    const id = String(Date.now());
+    multi = {img:small, items, saved:id};
+    selIdx = -1; $("multiFind").value = "";
+    scans.unshift({id, date:Date.now(), img:small, items});
+    scans = scans.slice(0,MAX_SCANS);
+    persistScans(); renderScans(); renderMulti();
+    if(navigator.vibrate) navigator.vibrate(60);
+  }catch(e){
+    multi = null; renderMulti();
+    $("multiStatus").textContent = "IA indisponible ("+e.message+"). Réessayez dans un instant.";
+  }
+}
+$("multiBtn").addEventListener("click",()=>$("multiIn").click());
+$("multiIn").addEventListener("change",e=>{ const f=e.target.files[0]; e.target.value=""; multiScan(f); });
+if(scans.length){ openMulti(); renderScans(); $("multiStatus").textContent = "Rouvrez une photo scannée pour retrouver vos jeux."; }
 
 /* ---------- Jaquettes (RAWG) ---------- */
 const RK = "rawg_key";
